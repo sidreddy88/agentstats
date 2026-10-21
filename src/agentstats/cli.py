@@ -1,13 +1,15 @@
-"""agentstats command line: summary, compare, judge, check, convert."""
+"""agentstats command line: summary, compare, judge, check, convert, sample, gate, init-ci."""
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-from agentstats import adapters, analysis, checks, judge, records, report
+from agentstats import adapters, analysis, checks, gate, judge, policy, records, report, sample
 from agentstats.analysis import DESIGNS
+from agentstats.ci_templates import FILES as CI_FILES
 
 DESIGN_HELP = ("how the eval set was built: curated (hand-picked, the default), sampled (random from real "
                "traffic), clustered (sampled, in groups that fail together; needs --cluster-by)")
@@ -62,6 +64,28 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--arm")
     v.add_argument("--out", required=True)
 
+    sm = sub.add_parser("sample", help="deterministic stratified sample of cases for a smoke tier")
+    sm.add_argument("cases", help="JSONL with a 'case' and optional 'tags' per row (cases or attempt rows)")
+    sm.add_argument("--policy", help="take n, stratify_by, always_include, seed from this policy's tier")
+    sm.add_argument("--tier", default="smoke")
+    sm.add_argument("--n", type=int)
+    sm.add_argument("--stratify-by")
+    sm.add_argument("--always-include", nargs="*", default=None)
+    sm.add_argument("--seed", type=int)
+    sm.add_argument("--json", action="store_true")
+
+    g = sub.add_parser("gate", help="check a tier's requirements; exit 0 pass, 1 fail, 2 inconclusive, 3 unhealthy")
+    g.add_argument("--policy", required=True)
+    g.add_argument("--tier", required=True)
+    g.add_argument("--candidate", nargs="+", required=True, help="results (several paths = several runs)")
+    g.add_argument("--baseline", nargs="+", help="baseline results, for comparison requirements")
+    g.add_argument("--conf", type=float, default=0.95)
+    g.add_argument("--json", action="store_true")
+
+    ic = sub.add_parser("init-ci", help="write a starter policy and smoke/nightly/release GitHub workflows")
+    ic.add_argument("--dir", default=".")
+    ic.add_argument("--force", action="store_true")
+
     args = ap.parse_args(argv)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
@@ -84,6 +108,40 @@ def main(argv: list[str] | None = None) -> int:
             out.append(a)
         records.write_jsonl(out, args.out)
         print(f"wrote {len(out)} attempts to {args.out}")
+    elif args.cmd == "sample":
+        tier = policy.load(args.policy).tiers[args.tier] if args.policy else None
+        n = args.n or (tier.sample if tier else None)
+        if not n:
+            ap.error("sample needs --n or a policy tier with 'sample'")
+        res = sample.stratified(sample.load_cases(args.cases), n,
+                                args.stratify_by or (tier.stratify_by if tier else None),
+                                args.always_include if args.always_include is not None
+                                else (tier.always_include if tier else []),
+                                args.seed if args.seed is not None else (tier.seed if tier else 0))
+        for note in res["notes"]:
+            print(f"note: {note}", file=sys.stderr)
+        print(json.dumps(res, indent=2) if args.json else "\n".join(res["cases"]))
+    elif args.cmd == "gate":
+        pol = policy.load(args.policy)
+        if args.tier not in pol.tiers:
+            ap.error(f"tier {args.tier!r} not in the policy (have: {', '.join(pol.tiers)})")
+        res = gate.evaluate(pol.tiers[args.tier], pol, _load_many(args.candidate, "candidate"),
+                            _load_many(args.baseline, "baseline") if args.baseline else None, args.conf)
+        text = gate.render(res)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+                f.write(text)
+        print(json.dumps(res, indent=2, default=str) if args.json else text)
+        return res["exit_code"]
+    elif args.cmd == "init-ci":
+        root = Path(args.dir)
+        clash = [p for p in CI_FILES if (root / p).exists()]
+        if clash and not args.force:
+            ap.error(f"already exists: {', '.join(clash)} (use --force to overwrite)")
+        for p, body in CI_FILES.items():
+            (root / p).parent.mkdir(parents=True, exist_ok=True)
+            (root / p).write_text(body)
+            print(f"wrote {root / p}")
     elif args.cmd == "convert":
         records.write_jsonl(_load_many(args.jobs, args.arm), args.out)
         print(f"wrote {args.out}")

@@ -9,6 +9,7 @@ pip install -e .        # not on PyPI yet
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
+agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 ```
 
 ## Why
@@ -89,6 +90,39 @@ Always pass: 40, never pass: 52, flaky: 8
 
 Two runs of a hand-picked set say almost nothing about the pass rate, and the report says so instead of quoting
 the narrower per-case interval that doesn't fit.
+
+## Evals in CI, in tiers
+
+`agentstats init-ci` writes a policy (`agentstats.toml`) and three GitHub workflows. You replace one step in
+each, running your agent, and agentstats decides:
+
+| Tier | When | What runs | Typical requirements |
+|---|---|---|---|
+| smoke | every pull request, minutes | a stratified sample (`agentstats sample`) + all rule checks | `rules`, `min_pass_rate` (a crash threshold) |
+| nightly | every night | the whole eval set, k runs per case | `no_regression` vs the baseline, `max_infra` |
+| release | before shipping | the whole set against the production baseline | `no_regression`, `max_cost_ratio`, `max_p95_latency_ratio`, `min_pass_hat_k` |
+
+`agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/` exits
+**0 pass, 1 fail, 2 inconclusive, 3 unhealthy** (too many infrastructure failures to judge the agent), and writes
+its table to the GitHub job summary.
+
+Comparisons with the baseline are **non-inferiority tests**. "The interval includes zero" doesn't show that
+nothing regressed, so `no_regression = 0.02` passes only when the lower confidence bound of (candidate − baseline)
+is at least −2 points. An under-powered run is INCONCLUSIVE, with an estimate of how many runs would settle it,
+never PASS. Small smoke tiers say what they can't see: "with 20 cases and 1 run, this tier can only see drops
+larger than about 40 points: it catches breakage, not regressions."
+
+On the real runs above (with-diagnosis as the candidate, plain as the baseline):
+
+```
+## agentstats gate: nightly ⚠️ INCONCLUSIVE
+
+| requirement | measured | threshold | result | detail |
+| runs | 1 | >= 3 | ⚠️ INCONCLUSIVE | the nightly tier expects 3 complete runs |
+| max_infra | 0.0% | <= 5.0% | ✅ PASS | |
+| no_regression | +1.0 pts (CI -6.2 pts to +8.2 pts, mcnemar) | lower bound >= -2.0 pts | ⚠️ INCONCLUSIVE | about 6 runs per arm would settle it if the estimate holds |
+| max_cost_ratio | 0.89x (CI 0.80x to 0.99x) | <= 1.10x | ✅ PASS | |
+```
 
 ## Input
 
