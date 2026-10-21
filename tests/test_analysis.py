@@ -19,11 +19,11 @@ def make(arm, runs, cases, rate, tags=None, infra_every=0, cost=0.1):
     return out
 
 
-def test_curated_multi_run_uses_run_level():
+def test_curated_multi_run_uses_fixed_cases():
     s = analysis.summarize(make("a", 4, 40, 0.7))
-    assert s["pass_rate"]["method"] == "run_level"
+    assert s["pass_rate"]["method"] == "fixed_cases"
     assert s["claim"] == "on this eval set"
-    assert "per_case" in s["not_used"]
+    assert "per_case" in s["not_used"] and "run_level" in s["not_used"]
     assert s["reliability"]["k_max"] == 4
 
 
@@ -47,7 +47,7 @@ def test_clustered_with_clean_groups():
 def test_clustered_with_overlapping_groups_falls_back():
     s = analysis.summarize(make("a", 3, 40, 0.7, tags=lambda i: [f"feature:f{i % 5}", f"feature:g{i % 3}"]),
                            design="clustered", cluster_by="feature")
-    assert s["pass_rate"]["method"] == "run_level"
+    assert s["pass_rate"]["method"] in ("fixed_cases", "run_level")
     assert any("more than one group" in n for n in s["notes"])
 
 
@@ -65,9 +65,29 @@ def test_runs_with_different_cases_use_shared_cases():
     assert any("different cases" in n for n in s["notes"])
 
 
-def test_compare_curated_welch_detects_big_gain():
+def test_compare_curated_fixed_cases_detects_big_gain():
     c = analysis.compare(make("a", 5, 80, 0.4), make("b", 5, 80, 0.8))
-    assert c["method"] == "welch" and c["verdict"] == "BETTER"
+    assert c["method"] == "fixed_cases" and c["verdict"] == "BETTER"
+
+
+def shocked(arm, runs, cases, seed):
+    """Every case has its own rate, and each run adds a shared shock (a provider's good or bad hour)."""
+    r = random.Random(seed)
+    rates = [r.random() for _ in range(cases)]
+    out = []
+    for run in range(1, runs + 1):
+        shock = r.choice([-0.35, 0.35])
+        for i, p in enumerate(rates):
+            out.append(Attempt(case=f"c{i}", passed=r.random() < min(max(p + shock, 0), 1), arm=arm, run=run))
+    return out
+
+
+def test_run_wide_shock_falls_back_to_runs():
+    s = analysis.summarize(shocked("a", 6, 200, 1))
+    assert s["pass_rate"]["method"] == "run_level"
+    assert any("run-wide shock" in n for n in s["notes"])
+    c = analysis.compare(shocked("a", 6, 200, 1), shocked("b", 6, 200, 2))
+    assert c["method"] == "welch"
 
 
 def test_compare_no_difference_when_same():
