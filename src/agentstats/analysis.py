@@ -254,6 +254,7 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
         b1 = {x.case: bool(x.passed) for x in b_m}
         mcn = comparisons.mcnemar([a1[c] for c in matched], [b1[c] for c in matched])
 
+    shock = {"detected": False, "fallback": False, "arms": {}}
     method_design = design
     if design == "clustered":
         clusters, why = _clusters(matched, _case_tags(a_attempts + b_attempts), cluster_by)
@@ -271,11 +272,13 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
         shocks = {arm: comparisons.overdispersion(list(r.values()), cnt)
                   for arm, r, cnt in (("A", a_runs, a_counts), ("B", b_runs, b_counts))}
         hit = {arm: s for arm, s in shocks.items() if s and s["p_value"] < 0.05}
+        shock = {"detected": bool(hit), "fallback": False, "arms": hit}
         if hit:
             desc = "; ".join(f"{arm}: runs vary {s['ratio']:.1f}x more than per-case randomness predicts "
                              f"(p = {s['p_value']:.3f})" for arm, s in hit.items())
             if len(a_runs) >= 3 and len(b_runs) >= 3:
                 iv = comparisons.welch(list(a_runs.values()), list(b_runs.values()), conf)
+                shock["fallback"] = True
                 notes.append(f"Run-wide shock ({desc}). Using complete runs as observations (Welch's t) instead.")
             else:
                 notes.append(f"Run-wide shock ({desc}). With fewer than 3 runs per arm there's nothing safer to fall "
@@ -309,7 +312,7 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
         "cases": len(matched), "dropped": dropped,
         "delta": iv.to_json(), "verdict": verdict,
         "smallest_detectable": comparisons.smallest_detectable(iv, conf),
-        "min_effect": min_effect, "ship": ship, "notes": notes,
+        "min_effect": min_effect, "ship": ship, "notes": notes, "shock": shock,
         "moved": {"b_better": sorted(c for c in matched if pb[c] > pa[c]),
                   "b_worse": sorted(c for c in matched if pb[c] < pa[c])},
     }
