@@ -1,0 +1,5 @@
+[
+  {"name": "looked_up_order", "called": "get_order_details"},
+  {"name": "no_refund_before_lookup", "before": ["get_order_details", "issue_refund"]},
+  {"name": "right_order", "args": {"tool": "get_order_details", "match": {"order_id": "42"}}}
+]
