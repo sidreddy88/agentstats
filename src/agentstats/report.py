@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 METHOD_NAME = {
+    "fixed_cases": "fixed cases, noise from repeated trials per case",
     "run_level": "Student's t over complete runs",
     "per_case": "t over per-case pass rates",
     "clustered": "cluster-robust standard error",
@@ -11,7 +12,15 @@ METHOD_NAME = {
     "welch": "Welch's t-test over complete runs",
     "paired": "paired per-case differences",
     "paired_clustered": "paired differences, cluster-robust",
-    "mcnemar": "exact McNemar test + paired differences",
+    "mcnemar": "exact McNemar test (one trial per case per arm)",
+}
+
+
+WHEN_USED = {
+    "fixed_cases": "for hand-picked sets when runs don't show run-wide shocks",
+    "run_level": "for hand-picked sets with 3+ runs that show run-wide shocks",
+    "per_case": "when the cases were sampled at random from real traffic",
+    "clustered": "for sampled cases in groups that fail together",
 }
 
 
@@ -41,8 +50,7 @@ def summary(s: dict) -> str:
              f"{s['attempts']} graded attempts used ({s['attempts_loaded']} loaded)."
              + (f" Interval {pr['note']}." if "clipped" in pr.get("note", "") else ""), ""]
     for m, iv in s.get("not_used", {}).items():
-        lines.append(f"- Not used: {METHOD_NAME.get(m, m)} would give {_ci(iv)}; "
-                     f"it doesn't fit a {s['design']} set.")
+        lines.append(f"- Not used: {METHOD_NAME.get(m, m)} would give {_ci(iv)} ({WHEN_USED.get(m, '')}).")
     for n in s["notes"]:
         lines.append(f"- Note: {n}")
     if s.get("run_pass_rates") and len(s["run_pass_rates"]) > 1:

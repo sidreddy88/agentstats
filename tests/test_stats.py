@@ -108,3 +108,53 @@ def test_bootstrap_covers_estimate():
     units = list(range(50))
     iv = intervals.bootstrap(units, lambda us: sum(us) / len(us))
     assert iv.low < 24.5 < iv.high
+
+
+def _gate_v2_z(pr, base):
+    """agent-platform's diagnosis gate v2 test (app/evals/gate_v2.py paired_test), verbatim maths."""
+    t = v = 0.0
+    for c in pr:
+        a, k = sum(pr[c]), len(pr[c])
+        b, m = sum(base[c]), len(base[c])
+        t += a / k - b / m
+        p = (a + b) / (k + m)
+        v += p * (1 - p) * (1 / k + 1 / m)
+    return t / math.sqrt(v)
+
+
+def _counts(v):
+    return {c: (len(x), sum(x)) for c, x in v.items()}
+
+
+def test_fixed_cases_without_correction_reproduces_gate_v2():
+    r = random.Random(5)
+    base = {f"c{i}": [r.random() < 0.6 for _ in range(4)] for i in range(300)}
+    pr = {f"c{i}": [r.random() < 0.55 for _ in range(2)] for i in range(300)}
+    iv = comparisons.fixed_cases(_counts(base), _counts(pr), correction=False)
+    assert iv.z == pytest.approx(_gate_v2_z(pr, base))
+
+
+def test_fixed_cases_one_trial_each_is_mcnemar_normal_form():
+    a = {f"c{i}": [x] for i, x in enumerate([True] * 30 + [False] * 20 + [True] * 6 + [False] * 7)}
+    b = {f"c{i}": [x] for i, x in enumerate([True] * 30 + [False] * 20 + [False] * 6 + [True] * 7)}
+    iv = comparisons.fixed_cases(_counts(a), _counts(b))
+    assert iv.z == pytest.approx((7 - 6) / math.sqrt(13))
+
+
+def _false_alarm(correction, sims=1500, n=400, k=2, m=4, seed=11):
+    """No change: both sides drawn from each case's own rate (most cases near 0 or 1, as in real agent evals)."""
+    r = random.Random(seed)
+    rates = [r.choice([0.02, 0.98, 0.98, 0.5, 0.2, 0.8, 0.98, 0.02]) for _ in range(n)]
+    hits = 0
+    for _ in range(sims):
+        base = {f"c{i}": (m, sum(r.random() < p for _ in range(m))) for i, p in enumerate(rates)}
+        pr = {f"c{i}": (k, sum(r.random() < p for _ in range(k))) for i, p in enumerate(rates)}
+        z = comparisons.fixed_cases(base, pr, correction=correction).z
+        hits += z is not None and z < -1.645
+    return hits / sims
+
+
+def test_small_sample_correction_brings_false_alarms_to_nominal():
+    corrected, raw = _false_alarm(True), _false_alarm(False)
+    assert 0.03 <= corrected <= 0.07
+    assert raw > corrected
