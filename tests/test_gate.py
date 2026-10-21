@@ -142,3 +142,18 @@ def test_cli_sample_and_init_ci(tmp_path, capsys):
     assert set(p.tiers) == {"smoke", "nightly", "release"}
     with pytest.raises(SystemExit):
         cli.main(["init-ci", "--dir", str(tmp_path)])
+
+
+def test_run_wide_shock_with_two_runs_is_inconclusive_rerun():
+    """Two candidate runs, one hit by a shock that flips many cases at once (seen for real on a triage replay):
+    too few runs to fall back to run-level statistics, so the gate must ask for a rerun, not decide."""
+    base = make(4, 120, 0.85, 1)
+    r = random.Random(9)
+    cand = []
+    for run, shift in ((1, 0.0), (2, -0.45)):
+        for i in range(120):
+            cand.append(Attempt(case=f"c{i}", passed=r.random() < 0.85 + shift, run=run, metrics={"cost_usd": 0.1}))
+    p = policy.parse({"t": {"runs": 2, "require": {"no_regression": 0.05}}})
+    g = gate.evaluate(p.tiers["t"], p, cand, base)
+    r0 = row(g, "no_regression")
+    assert r0["result"] == gate.INCONCLUSIVE and "rerun" in r0["detail"]

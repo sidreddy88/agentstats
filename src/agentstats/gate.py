@@ -131,7 +131,13 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
         comparison = analysis.compare(baseline, candidate, policy.design, policy.cluster_by, conf)
         d = comparison["delta"]
         measured = f"{_pts(d['estimate'])} (CI {_pts(d['low'])} to {_pts(d['high'])}, {comparison['method']})"
-        if d["low"] is None or math.isnan(d["low"]):
+        shock = comparison.get("shock") or {}
+        if shock.get("detected") and not shock.get("fallback"):
+            arms = ", ".join("baseline" if a == "A" else "candidate" for a in shock["arms"])
+            rows.append(_row("no_regression", measured, f"lower bound >= {_pts(-m)}", INCONCLUSIVE,
+                             f"run-wide shock in the {arms} runs (whole runs vary more than per-case randomness "
+                             "predicts) with too few runs to correct for it: rerun"))
+        elif d["low"] is None or math.isnan(d["low"]):
             rows.append(_row("no_regression", measured, f"lower bound >= {_pts(-m)}", INCONCLUSIVE,
                              runs_needed(d, m, runs)))
         elif d["low"] >= -m:
