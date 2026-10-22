@@ -157,3 +157,12 @@ def test_run_wide_shock_with_two_runs_is_inconclusive_rerun():
     g = gate.evaluate(p.tiers["t"], p, cand, base)
     r0 = row(g, "no_regression")
     assert r0["result"] == gate.INCONCLUSIVE and "rerun" in r0["detail"]
+
+
+def test_no_significant_drop_passes_unchanged_and_fails_a_real_drop():
+    p = policy.parse({"t": {"runs": 2, "require": {"no_significant_drop": 0.0}}})
+    same = gate.evaluate(p.tiers["t"], p, make(2, 120, 0.8, 2), make(4, 120, 0.8, 1))
+    assert row(same, "no_significant_drop")["result"] == gate.PASS
+    assert "catches drops" in row(same, "no_significant_drop")["detail"]
+    worse = gate.evaluate(p.tiers["t"], p, make(2, 120, 0.5, 2), make(4, 120, 0.85, 1))
+    assert row(worse, "no_significant_drop")["result"] == gate.FAIL and worse["exit_code"] == 1

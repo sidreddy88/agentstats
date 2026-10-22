@@ -151,6 +151,28 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
                              runs_needed(d, m, min(comparison["a"]["runs"], comparison["b"]["runs"]))))
         notes += [f"Comparison: {n}" for n in comparison["notes"]]
 
+    if "no_significant_drop" in req:
+        m = req["no_significant_drop"]
+        comparison = comparison or analysis.compare(baseline, candidate, policy.design, policy.cluster_by, conf)
+        d = comparison["delta"]
+        measured = f"{_pts(d['estimate'])} (CI {_pts(d['low'])} to {_pts(d['high'])}, {comparison['method']})"
+        sd = comparison.get("smallest_detectable")
+        catch = f"this run reliably catches drops of about {_pts(-sd)} or more" if sd else ""
+        shock = comparison.get("shock") or {}
+        if d["high"] is None or math.isnan(d["high"]):
+            rows.append(_row("no_significant_drop", measured, f"upper bound >= {_pts(-m)}", INCONCLUSIVE,
+                             runs_needed(d, m, runs)))
+        elif d["high"] < -m:
+            rows.append(_row("no_significant_drop", measured, f"upper bound >= {_pts(-m)}", FAIL,
+                             "a real drop: the whole interval is below the threshold"))
+        elif shock.get("detected") and not shock.get("fallback"):
+            rows.append(_row("no_significant_drop", measured, f"upper bound >= {_pts(-m)}", INCONCLUSIVE,
+                             "run-wide shock with too few runs to correct for it: rerun"))
+        else:
+            rows.append(_row("no_significant_drop", measured, f"upper bound >= {_pts(-m)}", PASS, catch))
+        if "no_regression" not in req:
+            notes += [f"Comparison: {n}" for n in comparison["notes"]]
+
     if "max_cost_ratio" in req:
         rows.append(_upper_bound_check("max_cost_ratio", _ratio_interval(baseline, candidate, "cost_usd", mean, conf),
                                        req["max_cost_ratio"], _x))
