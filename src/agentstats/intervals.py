@@ -30,6 +30,7 @@ class Interval:
     se: float | None = None
     df: float | None = None
     note: str = ""
+    z: float | None = None
 
     @property
     def excludes_zero(self) -> bool:

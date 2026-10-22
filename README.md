@@ -9,6 +9,7 @@ pip install -e .        # not on PyPI yet
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
+agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 ```
 
 ## Why
@@ -37,12 +38,17 @@ Other good tools exist (see [Related tools](#related-tools)). agentstats is buil
 
    | `--design` | Your eval set | Interval / comparison | Claim |
    |---|---|---|---|
-   | `curated` (default) | hand-picked cases, most eval sets | Student's t over complete runs / Welch's t | "on this eval set" |
+   | `curated` (default) | hand-picked cases, most eval sets | fixed cases: noise from repeated trials of each case (falls back to Student's t / Welch's t over complete runs when runs vary more than that predicts) | "on this eval set" |
    | `sampled` | drawn at random from real traffic | per-case t / paired per-case differences | "on the population the cases came from" |
    | `clustered` | sampled, in groups that fail together | cluster-robust standard errors | "on the population the groups came from" |
 
-   With one run per arm it falls back to a Wilson interval or an exact McNemar test and labels the result
-   indicative. Overlapping groups can't be modelled credibly, so `clustered` refuses them and explains why.
+   For a hand-picked set the cases are fixed, so the only randomness is the agent's own: the fixed-cases test
+   measures it from repeated trials of each case, and cases that always (or never) pass contribute nothing. It's
+   the paired test from a production diagnosis gate, plus a small-sample correction that brought simulated false
+   alarms from 6.8% to 5.8% at a nominal 5% (the rest is the discreteness of pass/fail; a simulated threshold
+   would close it). It checks for run-wide shocks (whole runs varying more than per-case randomness predicts, as
+   when a provider has a bad hour) and then falls back to treating each complete run as one observation. With one
+   run it uses a Wilson interval or an exact McNemar test. Overlapping groups can't be modelled credibly, so `clustered` refuses them and explains why.
 3. **Reliability as its own result.** pass@k (capability) and pass^k (consistency) with CIs, and lists of
    always-pass, never-pass and flaky cases.
 4. **Infrastructure failures kept apart**, from Harbor exceptions or an `infra_error` field.
@@ -75,11 +81,12 @@ The same plain setup, run twice:
 ```
 $ agentstats summary jobs-plain100/... jobs-all500/...
 
-Pass rate: 44.0% (95% CI 0.0% to 94.8%), on this eval set.
-Method: Student's t over complete runs. 100 cases, 2 run(s). Interval clipped to the possible range.
-- Not used: t over per-case pass rates would give 44.0% (95% CI 34.5% to 53.5%); it doesn't fit a curated set.
-- Note: 2 runs: Student's t with 1 degree(s) of freedom gives a very wide interval; 3+ runs recommended.
-- Per run: run 1 48.0%, run 2 40.0%
+Pass rate: 44.0% (95% CI 41.2% to 46.8%), on this eval set.
+Method: fixed cases, noise from repeated trials per case. 100 cases, 2 run(s).
+- Not used: Student's t over complete runs would give 44.0% (95% CI 0.0% to 94.8%) (for hand-picked sets
+  with 3+ runs that show run-wide shocks).
+- Note: Whole runs vary 8.0x more than per-case randomness predicts (p = 0.005): a run-wide shock. With fewer
+  than 3 runs there's nothing safer to fall back to; treat this with care.
 
 | k | pass@k (capability)           | pass^k (consistency)          |
 | 1 | 44.0% (95% CI 34.5% to 53.5%) | 44.0% (95% CI 34.5% to 53.5%) |
@@ -87,8 +94,42 @@ Method: Student's t over complete runs. 100 cases, 2 run(s). Interval clipped to
 Always pass: 40, never pass: 52, flaky: 8
 ```
 
-Two runs of a hand-picked set say almost nothing about the pass rate, and the report says so instead of quoting
-the narrower per-case interval that doesn't fit.
+48% and 40% is more than per-case randomness explains: something changed across the whole run between the two
+(they ran at different times, in jobs of different sizes). A narrow interval from these two runs would be false
+confidence, and the report says so. A third run lets it fall back to run-level statistics.
+
+## Evals in CI, in tiers
+
+`agentstats init-ci` writes a policy (`agentstats.toml`) and three GitHub workflows. You replace one step in
+each, running your agent, and agentstats decides:
+
+| Tier | When | What runs | Typical requirements |
+|---|---|---|---|
+| smoke | every pull request, minutes | a stratified sample (`agentstats sample`) + all rule checks | `rules`, `min_pass_rate` (a crash threshold) |
+| nightly | every night | the whole eval set, k runs per case | `no_regression` vs the baseline, `max_infra` |
+| release | before shipping | the whole set against the production baseline | `no_regression`, `max_cost_ratio`, `max_p95_latency_ratio`, `min_pass_hat_k` |
+
+`agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/` exits
+**0 pass, 1 fail, 2 inconclusive, 3 unhealthy** (too many infrastructure failures to judge the agent), and writes
+its table to the GitHub job summary.
+
+Comparisons with the baseline are **non-inferiority tests**. "The interval includes zero" doesn't show that
+nothing regressed, so `no_regression = 0.02` passes only when the lower confidence bound of (candidate − baseline)
+is at least −2 points. An under-powered run is INCONCLUSIVE, with an estimate of how many runs would settle it,
+never PASS. Small smoke tiers say what they can't see: "with 20 cases and 1 run, this tier can only see drops
+larger than about 40 points: it catches breakage, not regressions."
+
+On the real runs above (with-diagnosis as the candidate, plain as the baseline):
+
+```
+## agentstats gate: nightly ⚠️ INCONCLUSIVE
+
+| requirement | measured | threshold | result | detail |
+| runs | 1 | >= 3 | ⚠️ INCONCLUSIVE | the nightly tier expects 3 complete runs |
+| max_infra | 0.0% | <= 5.0% | ✅ PASS | |
+| no_regression | +1.0 pts (CI -6.2 pts to +8.2 pts, mcnemar) | lower bound >= -2.0 pts | ⚠️ INCONCLUSIVE | about 6 runs per arm would settle it if the estimate holds |
+| max_cost_ratio | 0.89x (CI 0.80x to 0.99x) | <= 1.10x | ✅ PASS | |
+```
 
 ## Input
 
