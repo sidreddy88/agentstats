@@ -166,3 +166,11 @@ def test_no_significant_drop_passes_unchanged_and_fails_a_real_drop():
     assert "catches drops" in row(same, "no_significant_drop")["detail"]
     worse = gate.evaluate(p.tiers["t"], p, make(2, 120, 0.5, 2), make(4, 120, 0.85, 1))
     assert row(worse, "no_significant_drop")["result"] == gate.FAIL and worse["exit_code"] == 1
+
+
+def test_all_infra_failures_is_unhealthy_not_a_crash():
+    cand = [Attempt(case=f"c{i}", passed=None, run=1, infra_error="BadRequestError") for i in range(20)]
+    p = policy.parse({"t": {"runs": 1, "require": {"no_significant_drop": 0.0, "max_infra": 0.1}}})
+    g = gate.evaluate(p.tiers["t"], p, cand, make(4, 20, 0.9, 1))
+    assert g["overall"] == gate.UNHEALTHY and g["exit_code"] == 3
+    assert row(g, "graded attempts")["result"] == gate.UNHEALTHY

@@ -126,6 +126,14 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
                              PASS if share >= req["rules"] else FAIL, ", ".join(failing[:8])))
 
     comparison = None
+    graded_c = [a for a in candidate if a.valid]
+    graded_b = [a for a in baseline if a.valid] if baseline is not None else None
+    if not graded_c or (graded_b is not None and not graded_b and any(r in req for r in NEEDS_BASELINE)):
+        who = "candidate" if not graded_c else "baseline"
+        rows.append(_row("graded attempts", "0", "> 0", UNHEALTHY,
+                         f"every {who} attempt failed for infrastructure reasons: "
+                         f"{summ['infra']['kinds'] if who == 'candidate' else 'see the baseline'}"))
+        req = {k: v for k, v in req.items() if k not in NEEDS_BASELINE and k != "min_pass_hat_k"}
     if "no_regression" in req:
         m = req["no_regression"]
         comparison = analysis.compare(baseline, candidate, policy.design, policy.cluster_by, conf)
