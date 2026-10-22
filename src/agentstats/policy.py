@@ -11,6 +11,10 @@ Release-process tiers, from a TOML policy file (after Yesha Shah, "Agentic Evals
     require.rules = 1.0             # every trajectory rule check passes
     require.min_pass_rate = 0.5     # a crash threshold, not a regression test
 
+    [pr]                            # every pull request: fail only on a proven drop
+    runs = 2
+    require.no_significant_drop = 0.0
+
     [nightly]                       # the whole eval set, k runs per case
     runs = 3
     require.no_regression = 0.03    # vs baseline: CI lower bound of the change >= -3 pts
@@ -34,13 +38,16 @@ from agentstats.analysis import DESIGNS
 REQUIREMENTS = {
     "min_pass_rate": "pass rate (point estimate) at least this; a crash threshold",
     "rules": "share of trajectory rule checks passing, at least this",
-    "no_regression": "vs baseline: lower CI bound of (candidate - baseline) at least -margin (non-inferiority)",
+    "no_regression": "vs baseline: lower CI bound of (candidate - baseline) at least -margin (non-inferiority: "
+                     "proves it isn't worse; needs many runs)",
+    "no_significant_drop": "vs baseline: FAIL only if the whole CI is below -margin (proves it got worse; "
+                           "otherwise PASS, with the smallest drop this run could catch)",
     "max_infra": "infrastructure failure rate at most this; above it the run is unhealthy",
     "max_cost_ratio": "cost per attempt, candidate / baseline, at most this (CI-based)",
     "max_p95_latency_ratio": "p95 latency, candidate / baseline, at most this (CI-based)",
     "min_pass_hat_k": "pass^k (k = the tier's runs) at least this (CI-based)",
 }
-NEEDS_BASELINE = ("no_regression", "max_cost_ratio", "max_p95_latency_ratio")
+NEEDS_BASELINE = ("no_regression", "no_significant_drop", "max_cost_ratio", "max_p95_latency_ratio")
 
 
 @dataclass
