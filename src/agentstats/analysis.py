@@ -3,9 +3,11 @@ Summaries and comparisons that pick their statistics from how the eval set was b
 numbers support.
 
 Eval set designs (after Yesha Shah, "Agentic Evals" Part 2, and Miller 2024, arXiv 2411.00640):
-  curated    Hand-picked cases (most eval sets and benchmarks). Cases aren't a random sample, so they aren't
-             independent observations of anything bigger. Each complete run is one observation:
-             Student's t over runs, Welch's t to compare. Claim: "on this eval set".
+  curated    Hand-picked cases (most eval sets and benchmarks). Cases aren't a random sample of anything bigger,
+             so the claim is "on this eval set": the cases are fixed and the only randomness is the agent's own,
+             measured from repeated trials of each case (comparisons.fixed_cases). If whole runs vary more than
+             that per-case randomness predicts (a run-wide shock, such as a provider's bad hour), it falls back
+             to treating each complete run as one observation: Student's t over runs, Welch's t to compare.
   sampled    Cases drawn at random from real traffic, unrelated to each other. Each case is an observation:
              per-case t interval, paired per-case differences to compare. Claim: "on the population the cases
              were drawn from".
@@ -15,8 +17,11 @@ Eval set designs (after Yesha Shah, "Agentic Evals" Part 2, and Miller 2024, arX
 """
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Sequence
+
+from scipy import stats
 
 from agentstats import comparisons, reliability
 from agentstats.intervals import Interval, bootstrap, clustered, mean, quantile, t_interval, wilson
@@ -26,6 +31,7 @@ DESIGNS = ("curated", "sampled", "clustered")
 INFRA_WARN = 0.05
 
 CLAIM = {
+    "fixed_cases": "on this eval set",
     "run_level": "on this eval set",
     "per_case": "on the population the cases were sampled from",
     "clustered": "on the population the case groups were sampled from",
@@ -33,7 +39,8 @@ CLAIM = {
     "welch": "on this eval set",
     "paired": "on the population the cases were sampled from",
     "paired_clustered": "on the population the case groups were sampled from",
-    "mcnemar": "on this eval set, from a single run per arm (indicative: run-to-run noise is unmeasured)",
+    "mcnemar": "on this eval set, from one trial per case per arm (assumes no run-wide shocks, which one run "
+               "can't check)",
 }
 
 
@@ -127,10 +134,22 @@ def _headline(design: str, runs: dict[int, float], counts: dict[str, tuple[int, 
         return alt["per_case"], notes, alt
     # curated
     if k >= 2:
-        if k < 3:
-            notes.append(f"{k} runs: Student's t with {k - 1} degree(s) of freedom gives a very wide interval; "
-                         "3+ runs recommended.")
-        return alt["run_level"], notes, alt
+        n = len(counts)
+        var = sum((c / t) * (1 - c / t) / (t - 1) for t, c in counts.values() if t >= 2) / n ** 2
+        se = math.sqrt(var)
+        zc = float(stats.norm.ppf(0.5 + conf / 2))
+        est = mean(list(p.values()))
+        fixed = Interval(est, est - zc * se, est + zc * se, "fixed_cases", n, se=se)
+        alt["fixed_cases"] = fixed
+        shock = comparisons.overdispersion(list(runs.values()), counts)
+        if shock and shock["p_value"] < 0.05:
+            msg = (f"Whole runs vary {shock['ratio']:.1f}x more than per-case randomness predicts "
+                   f"(p = {shock['p_value']:.3f}): a run-wide shock.")
+            if k >= 3:
+                notes.append(msg + " Using complete runs as observations instead.")
+                return alt["run_level"], notes, alt
+            notes.append(msg + " With fewer than 3 runs there's nothing safer to fall back to; treat this with care.")
+        return fixed, notes, alt
     notes.append("One run of a hand-picked set: run-to-run noise is unmeasured. Run the eval at least 3 times "
                  "for an interval you can rely on.")
     return wilson(total_c, total_n, conf), notes, alt
@@ -235,6 +254,7 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
         b1 = {x.case: bool(x.passed) for x in b_m}
         mcn = comparisons.mcnemar([a1[c] for c in matched], [b1[c] for c in matched])
 
+    shock = {"detected": False, "fallback": False, "arms": {}}
     method_design = design
     if design == "clustered":
         clusters, why = _clusters(matched, _case_tags(a_attempts + b_attempts), cluster_by)
@@ -246,15 +266,23 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
     if method_design == "sampled":
         iv = comparisons.paired(diffs, conf)
     elif method_design == "curated":
-        if len(a_runs) >= 2 and len(b_runs) >= 2:
-            iv = comparisons.welch(list(a_runs.values()), list(b_runs.values()), conf)
-            if min(len(a_runs), len(b_runs)) < 3:
-                notes.append("Fewer than 3 runs per arm: the interval is very wide; 3+ runs recommended.")
-        else:
-            iv = comparisons.paired(diffs, conf)
-            iv.method = "mcnemar" if single else "paired"
-            notes.append("A hand-picked set needs several complete runs per arm to measure run-to-run noise. "
-                         "With one run, this compares the same cases pairwise: indicative only.")
+        iv = comparisons.fixed_cases(a_counts, b_counts, conf)
+        if single:
+            iv.method = "mcnemar"
+        shocks = {arm: comparisons.overdispersion(list(r.values()), cnt)
+                  for arm, r, cnt in (("A", a_runs, a_counts), ("B", b_runs, b_counts))}
+        hit = {arm: s for arm, s in shocks.items() if s and s["p_value"] < 0.05}
+        shock = {"detected": bool(hit), "fallback": False, "arms": hit}
+        if hit:
+            desc = "; ".join(f"{arm}: runs vary {s['ratio']:.1f}x more than per-case randomness predicts "
+                             f"(p = {s['p_value']:.3f})" for arm, s in hit.items())
+            if len(a_runs) >= 3 and len(b_runs) >= 3:
+                iv = comparisons.welch(list(a_runs.values()), list(b_runs.values()), conf)
+                shock["fallback"] = True
+                notes.append(f"Run-wide shock ({desc}). Using complete runs as observations (Welch's t) instead.")
+            else:
+                notes.append(f"Run-wide shock ({desc}). With fewer than 3 runs per arm there's nothing safer to fall "
+                             "back to; treat this with care.")
 
     _clip(iv, -1.0, 1.0)
     if iv.excludes_zero:
@@ -284,7 +312,7 @@ def compare(a_attempts: list[Attempt], b_attempts: list[Attempt], design: str = 
         "cases": len(matched), "dropped": dropped,
         "delta": iv.to_json(), "verdict": verdict,
         "smallest_detectable": comparisons.smallest_detectable(iv, conf),
-        "min_effect": min_effect, "ship": ship, "notes": notes,
+        "min_effect": min_effect, "ship": ship, "notes": notes, "shock": shock,
         "moved": {"b_better": sorted(c for c in matched if pb[c] > pa[c]),
                   "b_worse": sorted(c for c in matched if pb[c] < pa[c])},
     }
