@@ -157,7 +157,7 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
         d = comparison["delta"]
         measured = f"{_pts(d['estimate'])} (CI {_pts(d['low'])} to {_pts(d['high'])}, {comparison['method']})"
         sd = comparison.get("smallest_detectable")
-        catch = f"this run reliably catches drops of about {_pts(-sd)} or more" if sd else ""
+        catch = f"this run reliably catches drops of about {100 * sd:.1f} points or more" if sd else ""
         shock = comparison.get("shock") or {}
         if d["high"] is None or math.isnan(d["high"]):
             rows.append(_row("no_significant_drop", measured, f"upper bound >= {_pts(-m)}", INCONCLUSIVE,
