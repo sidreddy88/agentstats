@@ -109,8 +109,9 @@ agentstats runs the regression gate for a production incident-triage agent (clas
 duplicate with a P0-P3 severity): 114 held-out cases, 2 trials per pull request, compared case by case with a 4-trial
 baseline using the fixed-cases test, `no_significant_drop` at a 90% interval.
 
-**Sized by simulation from the baseline's own per-case rates,** against the gate it replaced (fail if more than 6% of
-80 filtered cases miss, one run):
+**Sized by simulation from the baseline's own per-case rates** (each case's true rate drawn from its baseline trials,
+then candidate and baseline simulated from it; `agentstats size` does the same for your baseline), against the gate it
+replaced (fail if more than 6% of 80 filtered cases miss, one run):
 
 | True drop | agentstats gate catches it | Old threshold gate |
 |---|---|---|
