@@ -151,6 +151,10 @@ each, running your agent, and agentstats decides:
 **0 pass, 1 fail, 2 inconclusive, 3 unhealthy** (too many infrastructure failures to judge the agent), and writes
 its table to the GitHub job summary.
 
+**Size a gate before trusting it:** `agentstats size --baseline baseline.jsonl --trials 2 --rule drop` simulates the
+rule on your baseline's own per-case rates and prints how often it would pass or fail for a range of true drops, so you
+can pick trials and margins (e.g. no change passes >= 90%, an 8-point drop fails >= 90%).
+
 Comparisons with the baseline are **non-inferiority tests**. "The interval includes zero" doesn't show that
 nothing regressed, so `no_regression = 0.02` passes only when the lower confidence bound of (candidate − baseline)
 is at least −2 points. An under-powered run is INCONCLUSIVE, with an estimate of how many runs would settle it,
@@ -242,7 +246,7 @@ trajectories; and the production results above.
 ## Limitations
 
 - Pass rates need pass/fail verdicts; numeric scores are used for efficiency metrics and judge consistency.
-- No power analysis beyond the "smallest detectable difference" estimate.
+- Power analysis is by simulation (`agentstats size`) for the two gate rules; no closed-form sample-size planner.
 - The judge check uses the judge's most common verdict per item; it does not correct downstream statistics for
   judge error (evalstats does).
 
