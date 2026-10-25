@@ -51,7 +51,12 @@ Other good tools exist (see [Related tools](#related-tools)). agentstats is buil
    run it uses a Wilson interval or an exact McNemar test. Overlapping groups can't be modelled credibly, so `clustered` refuses them and explains why.
 3. **Reliability as its own result.** pass@k (capability) and pass^k (consistency) with CIs, and lists of
    always-pass, never-pass and flaky cases.
-4. **Infrastructure failures kept apart**, from Harbor exceptions or an `infra_error` field.
+4. **Gates that can say "I can't tell".** Two regression rules: `no_significant_drop` fails only on a proven drop
+   (for pull requests); `no_regression` passes only when the change is shown to be no worse than a margin
+   (non-inferiority, for releases), so an under-powered run is INCONCLUSIVE, with an estimate of the runs that would
+   settle it, never PASS. A run-wide shock with too few runs to correct for it is also INCONCLUSIVE ("rerun").
+   Infrastructure failures (Harbor exceptions or an `infra_error` field) are kept out of pass rates and make a run
+   UNHEALTHY (exit 3), as eval-sprint also does.
 5. **Judge checks:** human agreement (Fleiss' κ), judge vs humans (accuracy, strictness, leniency, Cohen's κ,
    each with a CI, on a held-out split if you mark one) and judge consistency over repeated runs (flip rate, mean
    pairwise disagreement).
@@ -97,6 +102,38 @@ Always pass: 40, never pass: 52, flaky: 8
 48% and 40% is more than per-case randomness explains: something changed across the whole run between the two
 (they ran at different times, in jobs of different sizes). A narrow interval from these two runs would be false
 confidence, and the report says so. A third run lets it fall back to run-level statistics.
+
+## In production: an incident-triage agent's CI gate
+
+agentstats runs the regression gate for a production incident-triage agent (classifies alerts as real / noise /
+duplicate with a P0-P3 severity): 114 held-out cases, 2 trials per pull request, compared case by case with a 4-trial
+baseline using the fixed-cases test, `no_significant_drop` at a 90% interval.
+
+**Sized by simulation from the baseline's own per-case rates,** against the gate it replaced (fail if more than 6% of
+80 filtered cases miss, one run):
+
+| True drop | agentstats gate catches it | Old threshold gate |
+|---|---|---|
+| none (false alarm) | 5% | ~0% |
+| ~5 points | 64% | 48% |
+| ~8 points | 94% | 82% |
+| ~12 points | 100% | 97% |
+
+The old gate also had to drop 32 noisy cases to get under its threshold; the paired test keeps them, since each case is
+compared with its own baseline rate.
+
+**What it caught in its first week:**
+- **An environment offset.** Six CI trials of unchanged code averaged 89.9% against a baseline measured on a laptop
+  (93.2%): -3.3 points, 95% CI -6.1 to -0.5, spread over many cases, no run-wide shock. One pull request had already
+  failed for it. The baseline is now measured in CI; the first gate run against it: -0.7 points (CI -3.4 to +2.1), PASS.
+- **Outages, as UNHEALTHY instead of FAIL.** Once when the API credit ran out mid-run (69 of 228 attempts failed:
+  exit 3, the cause listed, the remaining attempts compared separately), once when a new major SDK release rejected a
+  request parameter on every call.
+- **A doubtful "same setup".** Two runs of the same coding agent on the same 100 tasks scored 48% and 40%: the shock
+  check flagged it (whole runs varying 8x more than per-case randomness predicts, p = 0.005), so the narrow interval
+  wasn't trusted (see the example above).
+
+
 
 ## Evals in CI, in tiers
 
@@ -176,7 +213,9 @@ runtime dependency is scipy.
 - [evalci](https://github.com/Shreyaskc/evalci) ([arXiv 2607.04429](https://arxiv.org/abs/2607.04429)): CIs,
   paired tests, power analysis and multiple-comparison correction for per-item tables (lm-eval, HELM).
 - [eval-sprint](https://github.com/renanpgonzalez/eval-sprint): an eval kit with deterministic and LLM judges, a
-  labelling UI, judge calibration and a CI regression gate.
+  labelling UI, and a CI regression gate (exact McNemar on paired flips, errors kept out of pass rates, an
+  unhealthy-run exit code). Its judge calibration (blind expert labels, Horvitz-Thompson weights, Rogan-Gladen
+  correction) is more thorough than agentstats' judge check.
 
 ## Limitations
 
