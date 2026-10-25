@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from agentstats import adapters, analysis, checks, gate, judge, policy, records, report, sample
+from agentstats import adapters, analysis, checks, gate, judge, policy, records, report, sample, sizing
 from agentstats.analysis import DESIGNS
 from agentstats.ci_templates import FILES as CI_FILES
 
@@ -82,6 +82,17 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--conf", type=float, default=0.95)
     g.add_argument("--json", action="store_true")
 
+    sz = sub.add_parser("size", help="simulate a gate on your baseline: pass/fail rates for a range of true drops")
+    sz.add_argument("--baseline", nargs="+", required=True, help="baseline results (several trials per case)")
+    sz.add_argument("--trials", type=int, default=2, help="candidate trials per case (what each PR would run)")
+    sz.add_argument("--rule", choices=sizing.RULES, default="drop",
+                    help="drop = no_significant_drop (PR tier); noninferiority = no_regression (release tier)")
+    sz.add_argument("--margin", type=float, default=0.0)
+    sz.add_argument("--conf", type=float, default=0.90)
+    sz.add_argument("--sims", type=int, default=1000)
+    sz.add_argument("--seed", type=int, default=0)
+    sz.add_argument("--json", action="store_true")
+
     ic = sub.add_parser("init-ci", help="write a starter policy and smoke/nightly/release GitHub workflows")
     ic.add_argument("--dir", default=".")
     ic.add_argument("--force", action="store_true")
@@ -133,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
                 f.write(text)
         print(json.dumps(res, indent=2, default=str) if args.json else text)
         return res["exit_code"]
+    elif args.cmd == "size":
+        res = sizing.simulate(_load_many(args.baseline, "baseline"), args.trials, args.rule, args.margin, args.conf,
+                              sims=args.sims, seed=args.seed)
+        print(json.dumps(res, indent=2) if args.json else sizing.render(res))
     elif args.cmd == "init-ci":
         root = Path(args.dir)
         clash = [p for p in CI_FILES if (root / p).exists()]
