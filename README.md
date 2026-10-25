@@ -51,7 +51,12 @@ Other good tools exist (see [Related tools](#related-tools)). agentstats is buil
    run it uses a Wilson interval or an exact McNemar test. Overlapping groups can't be modelled credibly, so `clustered` refuses them and explains why.
 3. **Reliability as its own result.** pass@k (capability) and pass^k (consistency) with CIs, and lists of
    always-pass, never-pass and flaky cases.
-4. **Infrastructure failures kept apart**, from Harbor exceptions or an `infra_error` field.
+4. **Gates that can say "I can't tell".** Two regression rules: `no_significant_drop` fails only on a proven drop
+   (for pull requests); `no_regression` passes only when the change is shown to be no worse than a margin
+   (non-inferiority, for releases), so an under-powered run is INCONCLUSIVE, with an estimate of the runs that would
+   settle it, never PASS. A run-wide shock with too few runs to correct for it is also INCONCLUSIVE ("rerun").
+   Infrastructure failures (Harbor exceptions or an `infra_error` field) are kept out of pass rates and make a run
+   UNHEALTHY (exit 3), as eval-sprint also does.
 5. **Judge checks:** human agreement (Fleiss' κ), judge vs humans (accuracy, strictness, leniency, Cohen's κ,
    each with a CI, on a held-out split if you mark one) and judge consistency over repeated runs (flip rate, mean
    pairwise disagreement).
@@ -98,6 +103,39 @@ Always pass: 40, never pass: 52, flaky: 8
 (they ran at different times, in jobs of different sizes). A narrow interval from these two runs would be false
 confidence, and the report says so. A third run lets it fall back to run-level statistics.
 
+## In production: an incident-triage agent's CI gate
+
+agentstats runs the regression gate for a production incident-triage agent (classifies alerts as real / noise /
+duplicate with a P0-P3 severity): 114 held-out cases, 2 trials per pull request, compared case by case with a 4-trial
+baseline using the fixed-cases test, `no_significant_drop` at a 90% interval.
+
+**Sized by simulation from the baseline's own per-case rates** (each case's true rate drawn from its baseline trials,
+then candidate and baseline simulated from it; `agentstats size` does the same for your baseline), against the gate it
+replaced (fail if more than 6% of 80 filtered cases miss, one run):
+
+| True drop | agentstats gate catches it | Old threshold gate |
+|---|---|---|
+| none (false alarm) | 5% | ~0% |
+| ~5 points | 64% | 48% |
+| ~8 points | 94% | 82% |
+| ~12 points | 100% | 97% |
+
+The old gate also had to drop 32 noisy cases to get under its threshold; the paired test keeps them, since each case is
+compared with its own baseline rate.
+
+**What it caught in its first week:**
+- **An environment offset.** Six CI trials of unchanged code averaged 89.9% against a baseline measured on a laptop
+  (93.2%): -3.3 points, 95% CI -6.1 to -0.5, spread over many cases, no run-wide shock. One pull request had already
+  failed for it. The baseline is now measured in CI; the first gate run against it: -0.7 points (CI -3.4 to +2.1), PASS.
+- **Outages, as UNHEALTHY instead of FAIL.** Once when the API credit ran out mid-run (69 of 228 attempts failed:
+  exit 3, the cause listed, the remaining attempts compared separately), once when a new major SDK release rejected a
+  request parameter on every call.
+- **A doubtful "same setup".** Two runs of the same coding agent on the same 100 tasks scored 48% and 40%: the shock
+  check flagged it (whole runs varying 8x more than per-case randomness predicts, p = 0.005), so the narrow interval
+  wasn't trusted (see the example above).
+
+
+
 ## Evals in CI, in tiers
 
 `agentstats init-ci` writes a policy (`agentstats.toml`) and three GitHub workflows. You replace one step in
@@ -112,6 +150,10 @@ each, running your agent, and agentstats decides:
 `agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/` exits
 **0 pass, 1 fail, 2 inconclusive, 3 unhealthy** (too many infrastructure failures to judge the agent), and writes
 its table to the GitHub job summary.
+
+**Size a gate before trusting it:** `agentstats size --baseline baseline.jsonl --trials 2 --rule drop` simulates the
+rule on your baseline's own per-case rates and prints how often it would pass or fail for a range of true drops, so you
+can pick trials and margins (e.g. no change passes >= 90%, an 8-point drop fails >= 90%).
 
 Comparisons with the baseline are **non-inferiority tests**. "The interval includes zero" doesn't show that
 nothing regressed, so `no_regression = 0.02` passes only when the lower confidence bound of (candidate − baseline)
@@ -157,8 +199,8 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
 ## Methods and sources
 
 - Error bars for evals, clustered standard errors: Miller 2024, [arXiv 2411.00640](https://arxiv.org/abs/2411.00640).
-- Choosing the method by how the eval set was built, pass^k for agents, judge alignment and consistency metrics:
-  Yesha Shah's "Agentic Evals" series (Google Cloud, 2026), Parts 2 and 3.
+- Choosing the method by how the eval set was built, evals in CI tiers, judge alignment and consistency metrics:
+  Yesha Shah's "Agentic Evals" series (see [Credits](#credits)).
 - pass@k: Chen et al. 2021, [arXiv 2107.03374](https://arxiv.org/abs/2107.03374). pass^k: τ-bench, Yao et al.,
   [arXiv 2406.12045](https://arxiv.org/abs/2406.12045). Randomness in agentic evals: Bjarnason et al. 2026,
   [arXiv 2602.07150](https://arxiv.org/abs/2602.07150).
@@ -168,6 +210,28 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
 Every statistic is tested against scipy or statsmodels (`tests/test_stats.py`, `tests/test_judge.py`). The only
 runtime dependency is scipy.
 
+## Credits
+
+The framing behind several features comes from Yesha Shah's **Agentic Evals** series (Google Cloud Agent Quality):
+[Part 1, "A Software Engineer's Guide"](https://yeshas93.substack.com/p/agentic-evals-a-software-engineers)
+(2026-09-21); [Part 2, "Statistical Tools for Measuring Agent Performance"](https://yeshas93.substack.com/p/agentic-evals-statistical-tools-for)
+(2026-09-30); [Part 3, "Introduction to Autoraters"](https://substack.com/home/post/p-220996535) (2026-10-19):
+
+- choosing the statistics by how the eval set was built (benchmark vs generalised performance; curated, sampled and
+  correlated eval sets);
+- pass@k and pass^k for agents, and reporting intervals rather than single runs;
+- evals in CI in tiers (smoke, nightly, release), a stratified smoke sample, and rule-based checks on trajectories;
+- the judge checks: strictness, leniency, Cohen's and Fleiss' κ, a held-out split, verdict flip rate and mean pairwise
+  disagreement.
+
+The statistical methods themselves come from the papers listed under [Methods and sources](#methods-and-sources),
+which the series also cites.
+
+Original to agentstats: the fixed-cases test with its small-sample correction (from a production diagnosis
+regression gate) and the run-wide shock check; the gate rules (`no_significant_drop` and non-inferiority, INCONCLUSIVE
+with a runs estimate, a rerun on a shock, UNHEALTHY on infrastructure failures); reading Harbor jobs and ATIF
+trajectories; and the production results above.
+
 ## Related tools
 
 - [evalstats](https://github.com/ianarawjo/evalstats) ([arXiv 2609.35815](https://arxiv.org/abs/2609.35815)):
@@ -176,12 +240,14 @@ runtime dependency is scipy.
 - [evalci](https://github.com/Shreyaskc/evalci) ([arXiv 2607.04429](https://arxiv.org/abs/2607.04429)): CIs,
   paired tests, power analysis and multiple-comparison correction for per-item tables (lm-eval, HELM).
 - [eval-sprint](https://github.com/renanpgonzalez/eval-sprint): an eval kit with deterministic and LLM judges, a
-  labelling UI, judge calibration and a CI regression gate.
+  labelling UI, and a CI regression gate (exact McNemar on paired flips, errors kept out of pass rates, an
+  unhealthy-run exit code). Its judge calibration (blind expert labels, Horvitz-Thompson weights, Rogan-Gladen
+  correction) is more thorough than agentstats' judge check.
 
 ## Limitations
 
 - Pass rates need pass/fail verdicts; numeric scores are used for efficiency metrics and judge consistency.
-- No power analysis beyond the "smallest detectable difference" estimate.
+- Power analysis is by simulation (`agentstats size`) for the two gate rules; no closed-form sample-size planner.
 - The judge check uses the judge's most common verdict per item; it does not correct downstream statistics for
   judge error (evalstats does).
 
