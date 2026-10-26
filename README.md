@@ -147,6 +147,12 @@ each, running your agent, and agentstats decides:
 | nightly | every night | the whole eval set, k runs per case | `no_regression` vs the baseline, `max_infra` |
 | release | before shipping | the whole set against the production baseline | `no_regression`, `max_cost_ratio`, `max_p95_latency_ratio`, `min_pass_hat_k` |
 
+Two more requirements, both from real misses: `max_no_answer` caps the share of attempts with no usable answer, and
+`max_slice_drop` (with `slice_by = "<tag prefix>"` in the tier) fails when any slice, e.g. one error template, is
+proven worse than the baseline by more than the limit. Slice intervals are Bonferroni-adjusted across slices, slices
+whose estimate is past the limit but not proven are named as leads, and with `slice_by` set the per-slice table is
+printed even without the requirement.
+
 `agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/` exits
 **0 pass, 1 fail, 2 inconclusive, 3 unhealthy** (too many infrastructure failures to judge the agent), and writes
 its table to the GitHub job summary.
@@ -185,6 +191,13 @@ One row per attempt (`agentstats convert` writes this from Harbor jobs):
 
 A *run* is one full pass over the eval set. Several paths for one arm are several runs. Runs are compared on the
 cases attempted in every run.
+
+`no_answer` (optional, a reason such as `"step_limit"` or `"parse_error"`) marks an attempt where the agent produced
+no usable answer at all. It counts as a failure, like a wrong answer, but is reported apart: a jump in no-answer
+attempts usually means the harness or the agent loop broke, not that the agent's judgement got worse. Rows are
+validated on load (the error names the file, line and field), and an optional `schema_version` (currently 1) lets a
+newer format be refused instead of half-read. `harness-evolve export` and agent-platform's triage gate both write this
+format; `tests/test_hardening.py` loads samples from each.
 
 Judge labels (`agentstats judge`), one row per verdict:
 
