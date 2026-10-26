@@ -9,6 +9,10 @@
   across slices, intervals clipped to the possible range); `max_slice_drop` fails on a proven slice drop and names
   large unproven drops as leads.
 
+- Rule gates: `min_rule_rate` (each trajectory rule holds at least this often, interval-based) and
+  `no_rule_regression` (each rule vs the baseline, fixed-cases, Bonferroni across rules). Behaviour checks that need
+  no labels; the gate prints a per-rule table.
+
 **Inputs**
 - Rows are validated on load with the file, line and field in the error (e.g. `'steps' must be a number, got list`).
 - Optional `schema_version` (1); newer versions are refused. Contract tests load rows written by harness-evolve and by
