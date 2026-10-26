@@ -177,6 +177,13 @@ def _efficiency(valid: list[Attempt], conf: float) -> dict:
     return out
 
 
+def no_answer_stats(valid: list[Attempt]) -> dict:
+    """Attempts that ended with no usable answer (step limit, unparseable output): counted as failures, shown apart."""
+    na = [a for a in valid if a.no_answer]
+    return {"count": len(na), "rate": len(na) / len(valid) if valid else 0.0,
+            "kinds": dict(Counter(a.no_answer for a in na))}
+
+
 def summarize(attempts: list[Attempt], design: str = "curated", cluster_by: str | None = None,
               conf: float = 0.95) -> dict:
     if design not in DESIGNS:
@@ -203,7 +210,12 @@ def summarize(attempts: list[Attempt], design: str = "curated", cluster_by: str 
         "infra": {"count": len(infra), "rate": len(infra) / len(in_scope) if in_scope else 0.0,
                   "kinds": dict(Counter(a.infra_error for a in infra)), "ungraded": len(ungraded)},
         "efficiency": _efficiency(valid, conf),
+        "no_answer": no_answer_stats(valid),
     }
+    if out["no_answer"]["count"]:
+        na = out["no_answer"]
+        notes.append(f"{na['count']} of {len(valid) - sum(1 for a in valid if a.passed)} failures had no usable answer "
+                     f"({na['kinds']}): counted as failures, but usually a harness or loop problem, not judgement.")
     if out["infra"]["rate"] > INFRA_WARN:
         notes.append(f"{out['infra']['rate']:.0%} of attempts were infrastructure failures (excluded). "
                      "Above 5%: check the environment before trusting the numbers.")
