@@ -46,8 +46,12 @@ REQUIREMENTS = {
     "max_cost_ratio": "cost per attempt, candidate / baseline, at most this (CI-based)",
     "max_p95_latency_ratio": "p95 latency, candidate / baseline, at most this (CI-based)",
     "min_pass_hat_k": "pass^k (k = the tier's runs) at least this (CI-based)",
+    "max_no_answer": "share of attempts that ended with no usable answer (step limit, unparseable output) at most "
+                     "this; a jump usually means the harness or loop broke",
+    "max_slice_drop": "vs baseline, per slice (the tier's slice_by tag prefix): FAIL if any slice is proven worse by "
+                      "more than this (Bonferroni-adjusted interval across slices)",
 }
-NEEDS_BASELINE = ("no_regression", "no_significant_drop", "max_cost_ratio", "max_p95_latency_ratio")
+NEEDS_BASELINE = ("no_regression", "no_significant_drop", "max_cost_ratio", "max_p95_latency_ratio", "max_slice_drop")
 
 
 @dataclass
@@ -58,6 +62,7 @@ class Tier:
     stratify_by: str | None = None
     always_include: list[str] = field(default_factory=list)
     seed: int = 0
+    slice_by: str | None = None      # tag prefix to compare per slice against the baseline, e.g. "template"
     require: dict[str, float] = field(default_factory=dict)
 
 
@@ -82,7 +87,10 @@ def parse(data: dict) -> Policy:
             raise ValueError(f"[{name}] unknown requirement(s) {sorted(unknown)}; known: {sorted(REQUIREMENTS)}")
         tiers[name] = Tier(name=name, runs=int(body.get("runs", 1)), sample=body.get("sample"),
                            stratify_by=body.get("stratify_by"), always_include=list(body.get("always_include") or []),
-                           seed=int(body.get("seed", 0)), require={k: float(v) for k, v in req.items()})
+                           seed=int(body.get("seed", 0)), slice_by=body.get("slice_by"),
+                           require={k: float(v) for k, v in req.items()})
+        if "max_slice_drop" in req and not tiers[name].slice_by:
+            raise ValueError(f"[{name}] max_slice_drop needs slice_by (a tag prefix, e.g. slice_by = \"template\")")
     if not tiers:
         raise ValueError("policy defines no tiers")
     return Policy(design=design, cluster_by=data.get("cluster_by"), tiers=tiers)

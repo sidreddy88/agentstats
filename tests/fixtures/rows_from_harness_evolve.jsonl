@@ -1,0 +1,6 @@
+{"arm": "evolved", "run": 1, "case": "pydata__xarray-2905", "passed": true, "infra_error": null, "cost_usd": 0.010582, "tags": [], "steps": 13}
+{"arm": "evolved", "run": 2, "case": "pydata__xarray-2905", "passed": true, "infra_error": null, "cost_usd": 0.046431, "tags": [], "steps": 9}
+{"arm": "evolved", "run": 3, "case": "pydata__xarray-2905", "passed": true, "infra_error": null, "cost_usd": 0.024489, "tags": [], "steps": 13}
+{"arm": "evolved", "run": 1, "case": "pydata__xarray-4629", "passed": true, "infra_error": null, "cost_usd": 0.02078, "tags": [], "steps": 8}
+{"arm": "evolved", "run": 2, "case": "pydata__xarray-4629", "passed": true, "infra_error": null, "cost_usd": 0.008084, "tags": [], "steps": 7}
+{"arm": "evolved", "run": 3, "case": "pydata__xarray-4629", "passed": true, "infra_error": null, "cost_usd": 0.00731, "tags": [], "steps": 9}

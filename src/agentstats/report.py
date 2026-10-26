@@ -59,6 +59,10 @@ def summary(s: dict) -> str:
     lines += ["", "## Infrastructure",
               f"{inf['count']} infrastructure failures ({_pct(inf['rate'])}), excluded from pass rates"
               + (f": {inf['kinds']}" if inf["kinds"] else "") + "."]
+    na = s.get("no_answer") or {}
+    if na.get("count"):
+        lines.append(f"{na['count']} attempts ended with no usable answer ({_pct(na['rate'])}), counted as failures: "
+                     f"{na['kinds']}.")
     if "reliability" in s:
         r = s["reliability"]
         lines += ["", "## Reliability", "| k | pass@k (capability) | pass^k (consistency) |", "|---|---|---|"]

@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 
 from agentstats import analysis
+from agentstats.comparisons import fixed_cases
 from agentstats.intervals import Interval, bootstrap, mean, quantile
 from agentstats.policy import NEEDS_BASELINE, Policy, Tier
 from agentstats.records import Attempt, by_case
@@ -88,6 +89,31 @@ def runs_needed(delta: dict, margin: float, runs: int, crit: float = 1.96) -> st
     target = (est + margin) / crit
     need = math.ceil(max(runs, 1) * (se / target) ** 2)
     return f"about {max(need, runs + 1)} runs per arm would settle it if the estimate holds"
+
+
+def slice_comparisons(baseline: list[Attempt], candidate: list[Attempt], prefix: str, conf: float) -> list[dict]:
+    """Candidate vs baseline per slice (cases tagged prefix:<name>), fixed-cases test on the cases both arms graded.
+    With many slices some will look worse by chance, so each interval is Bonferroni-adjusted across slices."""
+    def counts(atts: list[Attempt]) -> dict[str, tuple[int, int]]:
+        return {c: (len(v), sum(1 for a in v if a.passed)) for c, v in by_case([a for a in atts if a.valid]).items()}
+
+    def tags_of(atts: list[Attempt]) -> dict[str, str]:
+        return {a.case: t[len(prefix) + 1:] for a in atts for t in a.tags if t.startswith(prefix + ":")}
+
+    a_counts, b_counts = counts(baseline), counts(candidate)
+    names = tags_of(baseline) | tags_of(candidate)
+    groups: dict[str, list[str]] = {}
+    for c in sorted(set(a_counts) & set(b_counts) & set(names)):
+        groups.setdefault(names[c], []).append(c)
+    adj = 1 - (1 - conf) / max(len(groups), 1)
+    out = []
+    for name, cases in sorted(groups.items()):
+        iv = fixed_cases({c: a_counts[c] for c in cases}, {c: b_counts[c] for c in cases}, adj)
+        def rate(cnt: dict[str, tuple[int, int]], cases: list[str] = cases) -> float:
+            return sum(cnt[c][1] for c in cases) / sum(cnt[c][0] for c in cases)
+        out.append({"slice": name, "cases": len(cases), "baseline": rate(a_counts), "candidate": rate(b_counts),
+                    "delta": iv.estimate, "low": max(iv.low, -1.0), "high": min(iv.high, 1.0), "conf": adj})
+    return out
 
 
 def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: list[Attempt] | None = None,
@@ -181,6 +207,36 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
         if "no_regression" not in req:
             notes += [f"Comparison: {n}" for n in comparison["notes"]]
 
+    graded_cand = [a for a in candidate if a.valid]
+    na = analysis.no_answer_stats(graded_cand)
+    na_base = analysis.no_answer_stats([a for a in baseline if a.valid]) if baseline is not None else None
+    if "max_no_answer" in req:
+        detail = (f"{na['count']} attempts: {na['kinds']}" if na["count"] else "")
+        if na_base is not None:
+            detail += f"{'; ' if detail else ''}baseline {_pct(na_base['rate'])}"
+        rows.append(_row("max_no_answer", _pct(na["rate"]), f"<= {_pct(req['max_no_answer'])}",
+                         PASS if na["rate"] <= req["max_no_answer"] else FAIL, detail))
+    elif na["count"] and (na_base is None or na["rate"] > na_base["rate"]):
+        notes.append(f"{na['count']} candidate attempts ended with no usable answer ({_pct(na['rate'])}: "
+                     f"{na['kinds']})" + (f", baseline {_pct(na_base['rate'])}" if na_base is not None else "")
+                     + ". They count as failures; a jump usually means the harness or loop broke.")
+
+    slices = None
+    if tier.slice_by and baseline is not None:
+        slices = slice_comparisons(baseline, candidate, tier.slice_by, conf)
+        if "max_slice_drop" in req and slices:
+            m = req["max_slice_drop"]
+            worst = min(slices, key=lambda x: x["delta"])
+            dropped = [x for x in slices if x["high"] < -m]
+            leads = [x for x in slices if x["delta"] < -m and x not in dropped]
+            detail = (f"proven worse: {', '.join(x['slice'] for x in dropped)}; " if dropped else "")
+            detail += (f"estimated beyond the limit but not proven (few cases): "
+                       f"{', '.join(x['slice'] + ' ' + _pts(x['delta']) for x in leads)}; " if leads else "")
+            detail += f"{len(slices)} slices by {tier.slice_by}, {100 * slices[0]['conf']:.2f}% intervals (Bonferroni)"
+            rows.append(_row("max_slice_drop", f"worst: {worst['slice']} {_pts(worst['delta'])} "
+                             f"(CI {_pts(worst['low'])} to {_pts(worst['high'])})", f"no slice proven < {_pts(-m)}",
+                             FAIL if dropped else PASS, detail))
+
     if "max_cost_ratio" in req:
         rows.append(_upper_bound_check("max_cost_ratio", _ratio_interval(baseline, candidate, "cost_usd", mean, conf),
                                        req["max_cost_ratio"], _x))
@@ -205,7 +261,8 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
     overall = (UNHEALTHY if UNHEALTHY in results else FAIL if FAIL in results
                else INCONCLUSIVE if INCONCLUSIVE in results else PASS)
     return {"tier": tier.name, "overall": overall, "exit_code": EXIT[overall], "rows": rows, "notes": notes,
-            "cases": summ["cases"], "runs": runs, "pass_rate": summ["pass_rate"], "comparison": comparison}
+            "cases": summ["cases"], "runs": runs, "pass_rate": summ["pass_rate"], "comparison": comparison,
+            "slices": slices, "slice_by": tier.slice_by, "no_answer": na}
 
 
 def render(g: dict) -> str:
@@ -219,4 +276,11 @@ def render(g: dict) -> str:
     if g["notes"]:
         lines.append("")
         lines += [f"- {n}" for n in g["notes"]]
+    if g.get("slices"):
+        lines += ["", f"Per slice ({g['slice_by']}), candidate vs baseline, "
+                      f"{100 * g['slices'][0]['conf']:.2f}% intervals (Bonferroni across slices):", "",
+                  "| slice | cases | baseline | candidate | change (CI) |", "|---|---|---|---|---|"]
+        for x in sorted(g["slices"], key=lambda x: x["delta"]):
+            lines.append(f"| {x['slice']} | {x['cases']} | {_pct(x['baseline'])} | {_pct(x['candidate'])} | "
+                         f"{_pts(x['delta'])} ({_pts(x['low'])} to {_pts(x['high'])}) |")
     return "\n".join(lines) + "\n"

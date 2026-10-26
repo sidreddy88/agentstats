@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+**Gates**
+- `no_answer` outcome: attempts with no usable answer (step limit, unparseable output) count as failures but are
+  reported apart in `summary` and the gate; new requirement `max_no_answer`. A gate without it still notes a jump.
+- Per-slice comparisons: `slice_by` in a tier prints candidate vs baseline per slice (fixed-cases, Bonferroni-adjusted
+  across slices, intervals clipped to the possible range); `max_slice_drop` fails on a proven slice drop and names
+  large unproven drops as leads.
+
+**Inputs**
+- Rows are validated on load with the file, line and field in the error (e.g. `'steps' must be a number, got list`).
+- Optional `schema_version` (1); newer versions are refused. Contract tests load rows written by harness-evolve and by
+  agent-platform's triage gate.
+
+**Statistics**
+- Calibration tests: Wilson coverage, fixed-cases coverage, the drop gate's false-alarm rate (12,000 simulations; the
+  6% bound fails if the small-sample correction is removed) and power, and the shock check's false-positive rate.
+
 ## 0.2.0 (unreleased)
 
 **Gates for evals in CI**
