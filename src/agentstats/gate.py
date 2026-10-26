@@ -14,7 +14,7 @@ import math
 
 from agentstats import analysis
 from agentstats.comparisons import fixed_cases
-from agentstats.intervals import Interval, bootstrap, mean, quantile
+from agentstats.intervals import Interval, bootstrap, mean, quantile, wilson
 from agentstats.policy import NEEDS_BASELINE, Policy, Tier
 from agentstats.records import Attempt, by_case
 
@@ -116,6 +116,42 @@ def slice_comparisons(baseline: list[Attempt], candidate: list[Attempt], prefix:
     return out
 
 
+def _rule_counts(atts: list[Attempt]) -> dict[str, dict[str, tuple[int, int]]]:
+    """rule -> case -> (attempts where the rule was checked, attempts where it held), over graded attempts."""
+    out: dict[str, dict[str, list[int]]] = {}
+    for a in atts:
+        if not a.valid:
+            continue
+        for rule, ok in a.checks.items():
+            n_s = out.setdefault(rule, {}).setdefault(a.case, [0, 0])
+            n_s[0] += 1
+            n_s[1] += bool(ok)
+    return {r: {c: (n, s) for c, (n, s) in cases.items()} for r, cases in out.items()}
+
+
+def rule_comparisons(baseline: list[Attempt] | None, candidate: list[Attempt], conf: float) -> list[dict]:
+    """Per trajectory rule: how often it held in the candidate (Wilson interval over attempts) and, with a baseline,
+    candidate vs baseline on the cases both checked (fixed-cases, Bonferroni-adjusted across rules). These need no
+    labels: they measure behaviour ("called the lookup tool"), so they still work when the labels are wrong."""
+    cand = _rule_counts(candidate)
+    base = _rule_counts(baseline) if baseline is not None else {}
+    adj = 1 - (1 - conf) / max(len(cand), 1)
+    out = []
+    for rule in sorted(cand):
+        n = sum(k for k, _ in cand[rule].values())
+        s = sum(v for _, v in cand[rule].values())
+        iv = wilson(s, n, conf)
+        row = {"rule": rule, "attempts": n, "rate": s / n, "low": iv.low, "high": iv.high, "conf": adj}
+        shared = sorted(set(cand[rule]) & set(base.get(rule, {})))
+        if shared:
+            b_counts = {c: base[rule][c] for c in shared}
+            d = fixed_cases(b_counts, {c: cand[rule][c] for c in shared}, adj)
+            row.update(baseline_rate=sum(v for _, v in b_counts.values()) / sum(k for k, _ in b_counts.values()),
+                       delta=d.estimate, delta_low=max(d.low, -1.0), delta_high=min(d.high, 1.0), cases=len(shared))
+        out.append(row)
+    return out
+
+
 def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: list[Attempt] | None = None,
              conf: float = 0.95) -> dict:
     req = tier.require
@@ -150,6 +186,40 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
             failing = sorted({f"{a.case}:{r}" for a in candidate if a.valid for r, ok in a.checks.items() if not ok})
             rows.append(_row("rules", f"{_pct(share)} of {len(outcomes)} checks", f">= {_pct(req['rules'])}",
                              PASS if share >= req["rules"] else FAIL, ", ".join(failing[:8])))
+
+    rules = None
+    if "min_rule_rate" in req or "no_rule_regression" in req or any(a.checks for a in candidate):
+        rules = rule_comparisons(baseline, candidate, conf) or None
+    if "min_rule_rate" in req:
+        floor = req["min_rule_rate"]
+        if not rules:
+            rows.append(_row("min_rule_rate", "n/a", f">= {_pct(floor)}", INCONCLUSIVE,
+                             "no rule checks in the results"))
+        else:
+            below = [r for r in rules if r["high"] < floor]
+            unsure = [r for r in rules if r["rate"] < floor and r not in below]
+            worst = min(rules, key=lambda r: r["rate"])
+            rows.append(_row("min_rule_rate", f"lowest: {worst['rule']} {_pct(worst['rate'])} "
+                             f"(CI {_pct(worst['low'])} to {_pct(worst['high'])})", f">= {_pct(floor)}",
+                             FAIL if below else INCONCLUSIVE if unsure else PASS,
+                             (f"below: {', '.join(r['rule'] for r in below)}; " if below else "")
+                             + (f"can't tell yet: {', '.join(r['rule'] for r in unsure)}; " if unsure else "")
+                             + f"{len(rules)} rules"))
+    if "no_rule_regression" in req:
+        m = req["no_rule_regression"]
+        compared = [r for r in (rules or []) if "delta" in r]
+        if not compared:
+            rows.append(_row("no_rule_regression", "n/a", f"no rule proven < {_pts(-m)}", INCONCLUSIVE,
+                             "no rule was checked in both the baseline and the candidate"))
+        else:
+            dropped = [r for r in compared if r["delta_high"] < -m]
+            worst = min(compared, key=lambda r: r["delta"])
+            rows.append(_row("no_rule_regression", f"worst: {worst['rule']} {_pts(worst['delta'])} "
+                             f"(CI {_pts(worst['delta_low'])} to {_pts(worst['delta_high'])})",
+                             f"no rule proven < {_pts(-m)}", FAIL if dropped else PASS,
+                             (f"proven worse: {', '.join(r['rule'] for r in dropped)}; " if dropped else "")
+                             + f"{len(compared)} rules vs baseline, {100 * compared[0]['conf']:.2f}% intervals "
+                             "(Bonferroni)"))
 
     comparison = None
     graded_c = [a for a in candidate if a.valid]
@@ -262,7 +332,7 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
                else INCONCLUSIVE if INCONCLUSIVE in results else PASS)
     return {"tier": tier.name, "overall": overall, "exit_code": EXIT[overall], "rows": rows, "notes": notes,
             "cases": summ["cases"], "runs": runs, "pass_rate": summ["pass_rate"], "comparison": comparison,
-            "slices": slices, "slice_by": tier.slice_by, "no_answer": na}
+            "slices": slices, "slice_by": tier.slice_by, "no_answer": na, "rules": rules}
 
 
 def render(g: dict) -> str:
@@ -276,6 +346,14 @@ def render(g: dict) -> str:
     if g["notes"]:
         lines.append("")
         lines += [f"- {n}" for n in g["notes"]]
+    if g.get("rules"):
+        lines += ["", "Trajectory rules (how often each held; vs baseline where both checked it):", "",
+                  "| rule | attempts | held | baseline | change (CI) |", "|---|---|---|---|---|"]
+        for r in sorted(g["rules"], key=lambda r: r.get("delta", 0)):
+            change = (f"{_pts(r['delta'])} ({_pts(r['delta_low'])} to {_pts(r['delta_high'])})" if "delta" in r
+                      else "n/a")
+            base = _pct(r["baseline_rate"]) if "baseline_rate" in r else "n/a"
+            lines.append(f"| {r['rule']} | {r['attempts']} | {_pct(r['rate'])} | {base} | {change} |")
     if g.get("slices"):
         lines += ["", f"Per slice ({g['slice_by']}), candidate vs baseline, "
                       f"{100 * g['slices'][0]['conf']:.2f}% intervals (Bonferroni across slices):", "",

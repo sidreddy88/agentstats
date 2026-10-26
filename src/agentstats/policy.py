@@ -38,6 +38,10 @@ from agentstats.analysis import DESIGNS
 REQUIREMENTS = {
     "min_pass_rate": "pass rate (point estimate) at least this; a crash threshold",
     "rules": "share of trajectory rule checks passing, at least this",
+    "min_rule_rate": "every trajectory rule holds at least this often: PASS when the estimate clears it, FAIL when "
+                     "the whole interval is below it, INCONCLUSIVE in between",
+    "no_rule_regression": "vs baseline, per trajectory rule: FAIL if any rule is proven to hold less often than in "
+                          "the baseline by more than this (fixed-cases test, Bonferroni across rules). Needs no labels",
     "no_regression": "vs baseline: lower CI bound of (candidate - baseline) at least -margin (non-inferiority: "
                      "proves it isn't worse; needs many runs)",
     "no_significant_drop": "vs baseline: FAIL only if the whole CI is below -margin (proves it got worse; "
@@ -51,7 +55,8 @@ REQUIREMENTS = {
     "max_slice_drop": "vs baseline, per slice (the tier's slice_by tag prefix): FAIL if any slice is proven worse by "
                       "more than this (Bonferroni-adjusted interval across slices)",
 }
-NEEDS_BASELINE = ("no_regression", "no_significant_drop", "max_cost_ratio", "max_p95_latency_ratio", "max_slice_drop")
+NEEDS_BASELINE = ("no_regression", "no_significant_drop", "max_cost_ratio", "max_p95_latency_ratio", "max_slice_drop",
+                  "no_rule_regression")
 
 
 @dataclass
