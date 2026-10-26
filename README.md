@@ -147,6 +147,14 @@ each, running your agent, and agentstats decides:
 | nightly | every night | the whole eval set, k runs per case | `no_regression` vs the baseline, `max_infra` |
 | release | before shipping | the whole set against the production baseline | `no_regression`, `max_cost_ratio`, `max_p95_latency_ratio`, `min_pass_hat_k` |
 
+**Behaviour rules as a regression gate (no labels needed).** `min_rule_rate` requires every trajectory rule (the
+`checks` in each row, e.g. `{"called_lookup_tool": true}`) to hold at least that often, judged on its interval: FAIL
+only when the whole interval is below, INCONCLUSIVE when it can't tell. `no_rule_regression` compares each rule with
+the baseline, case by case (fixed-cases test, Bonferroni across rules), and fails when a rule is proven to hold less
+often. These catch what an accuracy gate can't when the labels are wrong: a triage agent that skipped a required
+lookup tool half the time and invented the number passed every accuracy check, because the labels had been built
+from its own answers. The gate prints a per-rule table either way.
+
 Two more requirements, both from real misses: `max_no_answer` caps the share of attempts with no usable answer, and
 `max_slice_drop` (with `slice_by = "<tag prefix>"` in the tier) fails when any slice, e.g. one error template, is
 proven worse than the baseline by more than the limit. Slice intervals are Bonferroni-adjusted across slices, slices
