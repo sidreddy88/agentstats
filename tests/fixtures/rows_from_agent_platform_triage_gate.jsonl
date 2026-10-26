@@ -1,0 +1,6 @@
+{"arm": "candidate", "run": 1, "case": "synth_71fab4c4", "tags": ["template:TOKENEXPIREDERROR"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "accepted alternative", "latency_s": 13.65, "cost_usd": 0.000783}
+{"arm": "candidate", "run": 1, "case": "synth_9924d8ef", "tags": ["template:APP_CRASHED"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "accepted alternative", "latency_s": 13.24, "cost_usd": 0.000764}
+{"arm": "candidate", "run": 1, "case": "synth_edfa4fe7", "tags": ["template:S3_NO_SUCH_KEY"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "matches ground truth", "latency_s": 5.09, "cost_usd": 0.000383}
+{"arm": "candidate", "run": 1, "case": "synth_d1f269c4", "tags": ["template:TOKENEXPIREDERROR"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "matches ground truth", "latency_s": 8.04, "cost_usd": 0.000729}
+{"arm": "candidate", "run": 1, "case": "synth_d484c878", "tags": ["template:HEAP_OUT_OF_MEMORY"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "matches ground truth", "latency_s": 8.34, "cost_usd": 0.000597}
+{"arm": "candidate", "run": 1, "case": "synth_67dc53de", "tags": ["template:HEALTH_CHECK_TIMEOUT"], "passed": true, "infra_error": null, "verdict": "PASS", "detail": "matches ground truth", "latency_s": 10.6, "cost_usd": 0.000723}
