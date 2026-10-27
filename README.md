@@ -248,7 +248,7 @@ runtime dependency is scipy.
 
 ## Credits
 
-The framing behind several features comes from Yesha Shah's **Agentic Evals** series (Google Cloud Agent Quality):
+The framing behind several features comes from Yesha Shah's **Agentic Evals** series:
 [Part 1, "A Software Engineer's Guide"](https://yeshas93.substack.com/p/agentic-evals-a-software-engineers)
 (2026-09-21); [Part 2, "Statistical Tools for Measuring Agent Performance"](https://yeshas93.substack.com/p/agentic-evals-statistical-tools-for)
 (2026-09-30); [Part 3, "Introduction to Autoraters"](https://substack.com/home/post/p-220996535) (2026-10-19):
