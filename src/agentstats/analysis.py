@@ -232,10 +232,14 @@ def summarize(attempts: list[Attempt], design: str = "curated", cluster_by: str 
                                     "pass_rate": wilson(sum(1 for a in atts if a.passed), len(atts), conf).to_json()}
         if len(counts) < 100:
             notes.append("Fewer than 100 cases: per-slice intervals are wide; treat slices as leads, not results.")
-    rules = sorted({r for a in valid for r in a.checks})
+    behaviour = [a for a in in_scope if not a.infra_error]      # rules need no verdict: graded or not
+    rules = sorted({r for a in behaviour for r in a.checks})
     if rules:
-        out["checks"] = {r: wilson(sum(1 for a in valid if a.checks.get(r)),
-                                   sum(1 for a in valid if r in a.checks), conf).to_json() for r in rules}
+        out["checks"] = {r: wilson(sum(1 for a in behaviour if a.checks.get(r)),
+                                   sum(1 for a in behaviour if r in a.checks), conf).to_json() for r in rules}
+    if not valid and behaviour:
+        notes.insert(0, f"Rules-only rows: {len(behaviour)} attempts with no pass/fail verdict (e.g. production "
+                        "traces). There's no pass rate; the trajectory rule checks below are the result.")
     return out
 
 

@@ -1,0 +1,20 @@
+{"resourceSpans": [{"scopeSpans": [{"spans": [
+  {"traceId": "t1", "spanId": "a", "name": "invoke_agent triage", "startTimeUnixNano": "1000000000", "endTimeUnixNano": "4000000000",
+   "attributes": [{"key": "gen_ai.operation.name", "value": {"stringValue": "invoke_agent"}},
+                  {"key": "agentstats.case", "value": {"stringValue": "case-oom"}},
+                  {"key": "gen_ai.usage.input_tokens", "value": {"intValue": "1200"}},
+                  {"key": "gen_ai.usage.output_tokens", "value": {"intValue": "80"}}]},
+  {"traceId": "t1", "spanId": "b", "name": "execute_tool check_duplicate_pr", "startTimeUnixNano": "1500000000", "endTimeUnixNano": "1600000000",
+   "attributes": [{"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+                  {"key": "gen_ai.tool.name", "value": {"stringValue": "check_duplicate_pr"}}]},
+  {"traceId": "t1", "spanId": "c", "name": "execute_tool get_occurrence_count", "startTimeUnixNano": "2000000000", "endTimeUnixNano": "2100000000",
+   "attributes": [{"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+                  {"key": "gen_ai.tool.name", "value": {"stringValue": "get_occurrence_count"}},
+                  {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": "{\"hours\": 24}"}}]},
+  {"traceId": "t2", "spanId": "d", "name": "invoke_agent triage", "startTimeUnixNano": "5000000000", "endTimeUnixNano": "6000000000",
+   "attributes": [{"key": "gen_ai.operation.name", "value": {"stringValue": "invoke_agent"}},
+                  {"key": "agentstats.case", "value": {"stringValue": "case-oom"}}]},
+  {"traceId": "t2", "spanId": "e", "name": "execute_tool check_duplicate_pr", "startTimeUnixNano": "5100000000", "endTimeUnixNano": "5200000000",
+   "attributes": [{"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+                  {"key": "gen_ai.tool.name", "value": {"stringValue": "check_duplicate_pr"}}]}
+]}]}]}

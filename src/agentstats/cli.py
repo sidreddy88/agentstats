@@ -64,6 +64,16 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--arm")
     v.add_argument("--out", required=True)
 
+    tr = sub.add_parser("convert-traces", help="OpenTelemetry (OTLP JSON) or Langfuse traces to agentstats JSONL")
+    tr.add_argument("traces", nargs="+", help="OTLP JSON export(s), or Langfuse trace JSON / JSONL")
+    tr.add_argument("--format", choices=["otlp", "langfuse"], required=True)
+    tr.add_argument("--rules", help="rules JSON: fills each row's checks from the trace's tool calls")
+    tr.add_argument("--verdicts", help="JSONL with trace_id, passed (and optional case, run, infra_error); "
+                    "without it the rows are rules-only (passed = null)")
+    tr.add_argument("--case-key", default="agentstats.case", help="OTLP span attribute naming the case")
+    tr.add_argument("--arm", default="default")
+    tr.add_argument("--out", required=True)
+
     sm = sub.add_parser("sample", help="deterministic stratified sample of cases for a smoke tier")
     sm.add_argument("cases", help="JSONL with a 'case' and optional 'tags' per row (cases or attempt rows)")
     sm.add_argument("--policy", help="take n, stratify_by, always_include, seed from this policy's tier")
@@ -157,6 +167,16 @@ def main(argv: list[str] | None = None) -> int:
             (root / p).parent.mkdir(parents=True, exist_ok=True)
             (root / p).write_text(body)
             print(f"wrote {root / p}")
+    elif args.cmd == "convert-traces":
+        from agentstats import traces
+        from agentstats.checks import load_rules
+        atts = traces.convert(args.traces, args.format, rules=load_rules(args.rules) if args.rules else None,
+                              verdicts=traces.load_verdicts(args.verdicts) if args.verdicts else None,
+                              arm=args.arm, case_key=args.case_key)
+        records.write_jsonl(atts, args.out)
+        graded = sum(1 for a in atts if a.passed is not None)
+        print(f"wrote {args.out}: {len(atts)} traces, {graded} with a verdict"
+              + ("" if graded else " (rules-only)"))
     elif args.cmd == "convert":
         records.write_jsonl(_load_many(args.jobs, args.arm), args.out)
         print(f"wrote {args.out}")

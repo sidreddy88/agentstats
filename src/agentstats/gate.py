@@ -19,6 +19,9 @@ from agentstats.policy import NEEDS_BASELINE, Policy, Tier
 from agentstats.records import Attempt, by_case
 
 PASS, FAIL, INCONCLUSIVE, UNHEALTHY = "PASS", "FAIL", "INCONCLUSIVE", "UNHEALTHY"
+# Requirements that need pass/fail verdicts (everything except the behaviour rules, infrastructure and no-answer).
+GRADE_REQUIREMENTS = ("min_pass_rate", "no_regression", "no_significant_drop", "max_slice_drop", "min_pass_hat_k",
+                      "max_cost_ratio", "max_p95_latency_ratio")
 EXIT = {PASS: 0, FAIL: 1, INCONCLUSIVE: 2, UNHEALTHY: 3}
 
 
@@ -117,10 +120,11 @@ def slice_comparisons(baseline: list[Attempt], candidate: list[Attempt], prefix:
 
 
 def _rule_counts(atts: list[Attempt]) -> dict[str, dict[str, tuple[int, int]]]:
-    """rule -> case -> (attempts where the rule was checked, attempts where it held), over graded attempts."""
+    """rule -> case -> (attempts where the rule was checked, attempts where it held). Every attempt that wasn't an
+    infrastructure failure counts, graded or not: behaviour rules need no verdict (rules-only rows from traces)."""
     out: dict[str, dict[str, list[int]]] = {}
     for a in atts:
-        if not a.valid:
+        if a.infra_error:
             continue
         for rule, ok in a.checks.items():
             n_s = out.setdefault(rule, {}).setdefault(a.case, [0, 0])
@@ -154,14 +158,25 @@ def rule_comparisons(baseline: list[Attempt] | None, candidate: list[Attempt], c
 
 def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: list[Attempt] | None = None,
              conf: float = 0.95) -> dict:
-    req = tier.require
+    req = dict(tier.require)
     rows: list[dict] = []
     notes: list[str] = []
+    # Rules-only rows (no pass/fail verdicts, e.g. production traces): requirements about pass rates can't be judged.
+    for arm, atts in (("candidate", candidate), ("baseline", baseline or [])):
+        if atts and not any(a.valid for a in atts) and any(a.passed is None and not a.infra_error for a in atts):
+            for k in [k for k in req if k in GRADE_REQUIREMENTS and (arm == "candidate" or k in NEEDS_BASELINE)]:
+                rows.append(_row(k, "n/a", "", INCONCLUSIVE, f"the {arm} rows have no pass/fail verdicts (rules-only)"))
+                del req[k]
     missing = [r for r in req if r in NEEDS_BASELINE and baseline is None]
     if missing:
         raise ValueError(f"[{tier.name}] requirements {missing} need --baseline")
     summ = analysis.summarize(candidate, policy.design, policy.cluster_by, conf)
     runs = summ["runs"]
+    behaviour = [a for a in candidate if not a.infra_error]
+    rules_only_c = not any(a.valid for a in candidate) and any(a.passed is None for a in behaviour)
+    if rules_only_c:            # no verdicts: count what the rules see, not graded attempts
+        runs = len({a.run for a in behaviour})
+        summ = {**summ, "cases": len({a.case for a in behaviour})}
     if runs < tier.runs:
         rows.append(_row("runs", str(runs), f">= {tier.runs}", INCONCLUSIVE,
                          f"the {tier.name} tier expects {tier.runs} complete runs"))
@@ -224,7 +239,9 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
     comparison = None
     graded_c = [a for a in candidate if a.valid]
     graded_b = [a for a in baseline if a.valid] if baseline is not None else None
-    if not graded_c or (graded_b is not None and not graded_b and any(r in req for r in NEEDS_BASELINE)):
+    rules_only = not graded_c and any(a.passed is None and not a.infra_error for a in candidate)
+    if (not graded_c and not rules_only) or (graded_b is not None and not graded_b
+                                               and any(r in req for r in NEEDS_BASELINE)):
         who = "candidate" if not graded_c else "baseline"
         rows.append(_row("graded attempts", "0", "> 0", UNHEALTHY,
                          f"every {who} attempt failed for infrastructure reasons: "
@@ -332,13 +349,14 @@ def evaluate(tier: Tier, policy: Policy, candidate: list[Attempt], baseline: lis
                else INCONCLUSIVE if INCONCLUSIVE in results else PASS)
     return {"tier": tier.name, "overall": overall, "exit_code": EXIT[overall], "rows": rows, "notes": notes,
             "cases": summ["cases"], "runs": runs, "pass_rate": summ["pass_rate"], "comparison": comparison,
-            "slices": slices, "slice_by": tier.slice_by, "no_answer": na, "rules": rules}
+            "slices": slices, "slice_by": tier.slice_by, "no_answer": na, "rules": rules, "rules_only": rules_only_c}
 
 
 def render(g: dict) -> str:
     icon = {PASS: "✅", FAIL: "❌", INCONCLUSIVE: "⚠️", UNHEALTHY: "🚧"}
     lines = [f"## agentstats gate: {g['tier']} {icon[g['overall']]} {g['overall']}", "",
-             f"{g['cases']} cases, {g['runs']} run(s).", "",
+             f"{g['cases']} cases, {g['runs']} run(s)" + (" (rules-only rows: no pass/fail verdicts)."
+                                                           if g.get("rules_only") else "."), "",
              "| requirement | measured | threshold | result | detail |", "|---|---|---|---|---|"]
     for r in g["rows"]:
         lines.append(f"| {r['requirement']} | {r['measured']} | {r['threshold']} | {icon[r['result']]} {r['result']} "
