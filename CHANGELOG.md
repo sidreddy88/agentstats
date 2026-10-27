@@ -14,6 +14,9 @@
   no labels; the gate prints a per-rule table.
 
 **Inputs**
+- `agentstats convert-traces`: OpenTelemetry (OTLP JSON, GenAI conventions) and Langfuse trace exports to rows; tool
+  calls become rule checks; `--verdicts` joins pass/fail by trace id, otherwise rows are rules-only and the rule gates
+  (and `summary`'s rule table) still work, while pass-rate requirements report INCONCLUSIVE instead of UNHEALTHY.
 - Rows are validated on load with the file, line and field in the error (e.g. `'steps' must be a number, got list`).
 - Optional `schema_version` (1); newer versions are refused. Contract tests load rows written by harness-evolve and by
   agent-platform's triage gate.
