@@ -10,6 +10,7 @@ agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
+agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
 ```
 
 ## Why
@@ -123,6 +124,13 @@ replaced (fail if more than 6% of 80 filtered cases miss, one run):
 The old gate also had to drop 32 noisy cases to get under its threshold; the paired test keeps them, since each case is
 compared with its own baseline rate.
 
+**A skipped tool the labels rewarded.** The triage agent (then on Claude Haiku 4.5) skipped a required lookup tool
+and wrote an invented count instead. The eval labels had been built from its own answers, so the accuracy gate couldn't
+see it. With behaviour rules, Haiku 4.5 as the candidate against Haiku 5.5: accuracy +0.9 pts (CI -2.1 to +3.9), PASS;
+`min_rule_rate` FAIL (lookup called in 25.4% of attempts, CI 21.0% to 30.5%); `no_rule_regression` FAIL (-74.6 pts vs
+100%). On 61 real-incident traces exported from Langfuse and read with `convert-traces` (rules-only, no labels): the
+lookup was called in 52.5% (CI 40.2% to 64.5%). The rules now run in that agent's CI gate.
+
 **What it caught in its first week:**
 - **An environment offset.** Six CI trials of unchanged code averaged 89.9% against a baseline measured on a laptop
   (93.2%): -3.3 points, 95% CI -6.1 to -0.5, spread over many cases, no run-wide shock. One pull request had already
@@ -207,6 +215,13 @@ validated on load (the error names the file, line and field), and an optional `s
 newer format be refused instead of half-read. `harness-evolve export` and agent-platform's triage gate both write this
 format; `tests/test_hardening.py` loads samples from each.
 
+**From traces** (`agentstats convert-traces`): an OpenTelemetry OTLP JSON export (tool calls are spans with
+`gen_ai.operation.name = "execute_tool"`, name in `gen_ai.tool.name`, arguments in `gen_ai.tool.call.arguments`;
+tokens from `gen_ai.usage.*`) or a Langfuse export (traces with their observations; TOOL observations are tool
+calls). One trace is one attempt; `--rules` fills its checks. Pass/fail comes from `--verdicts` (JSONL with
+`trace_id`, `passed`, optional `case`, `run`, `infra_error`); without it the rows are **rules-only**: no pass rate, but
+the rule gates work, which is what production traces without labels need.
+
 Judge labels (`agentstats judge`), one row per verdict:
 
 ```json
@@ -248,10 +263,23 @@ The framing behind several features comes from Yesha Shah's **Agentic Evals** se
 The statistical methods themselves come from the papers listed under [Methods and sources](#methods-and-sources),
 which the series also cites.
 
-Original to agentstats: the fixed-cases test with its small-sample correction (from a production diagnosis
-regression gate) and the run-wide shock check; the gate rules (`no_significant_drop` and non-inferiority, INCONCLUSIVE
-with a runs estimate, a rerun on a shock, UNHEALTHY on infrastructure failures); reading Harbor jobs and ATIF
-trajectories; and the production results above.
+Original to agentstats:
+
+- the fixed-cases test with its small-sample correction (from a production diagnosis regression gate), and the
+  run-wide shock check;
+- the gate rules: `no_significant_drop` and non-inferiority, INCONCLUSIVE with a runs estimate, a rerun on a shock;
+- gate sizing by simulation on your own baseline (`agentstats size`);
+- **behaviour rules as a regression gate**: `no_rule_regression` compares each trajectory rule with the baseline, case
+  by case with intervals, and `min_rule_rate` sets an interval-based floor. They need no labels, which is what caught a
+  production bug an accuracy gate passed (see the production section);
+- the **no-answer outcome** (a broken loop or unparseable output reported apart from wrong answers) and **per-slice
+  gates** with Bonferroni-adjusted intervals and named leads;
+- **rules-only rows from traces**: OpenTelemetry (GenAI conventions) and Langfuse exports, so behaviour can be gated on
+  production traces that have no labels;
+- **calibration tests** that fail if the statistics drift (e.g. the drop gate's false-alarm rate);
+- reading Harbor jobs and ATIF trajectories, and the production results above.
+
+UNHEALTHY on infrastructure failures and keeping them out of pass rates are also in eval-sprint.
 
 ## Related tools
 
