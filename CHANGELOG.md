@@ -2,6 +2,14 @@
 
 ## 0.3.0 (unreleased)
 
+**Model switches** (moved in from the stepdown package)
+- `agentstats preregister`: write the switch rule (margin, confidence, cost ratio, design, provenance, slices, input
+  hashes) to `prereg.json` + `prereg.md` before any result exists.
+- `agentstats switch`: SWITCH / KEEP / NOT YET for moving to a cheaper model (non-inferiority at a margin + cost
+  ratio, as-is and adapted steps, slices, provenance warning), with a decision record; with `--prereg` the rule comes
+  from the registration and is verified (committed, unchanged, before the results, inputs unchanged).
+- Example: `examples/switch-triage-haiku-5-5/` (a production decision).
+
 **Gates**
 - `no_answer` outcome: attempts with no usable answer (step limit, unparseable output) count as failures but are
   reported apart in `summary` and the gate; new requirement `max_no_answer`. A gate without it still notes a jump.

@@ -1,4 +1,5 @@
-"""agentstats command line: summary, compare, judge, check, convert, sample, gate, init-ci."""
+"""agentstats command line: summary, compare, judge, check, convert, sample, gate, size, init-ci,
+preregister, switch."""
 from __future__ import annotations
 
 import argparse
@@ -7,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from agentstats import adapters, analysis, checks, gate, judge, policy, records, report, sample, sizing
+from agentstats import adapters, analysis, checks, gate, judge, policy, records, report, sample, sizing, switch_cli
 from agentstats.analysis import DESIGNS
 from agentstats.ci_templates import FILES as CI_FILES
 
@@ -107,7 +108,10 @@ def main(argv: list[str] | None = None) -> int:
     ic.add_argument("--dir", default=".")
     ic.add_argument("--force", action="store_true")
 
+    switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
+    if args.cmd in ("preregister", "switch"):
+        return switch_cli.run(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))
