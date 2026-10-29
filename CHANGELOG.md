@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-10-29)
+
+First release on PyPI.
 
 **Model switches** (moved in from the stepdown package)
 - `agentstats preregister`: write the switch rule (margin, confidence, cost ratio, design, provenance, slices, input
@@ -33,7 +35,7 @@
 - Calibration tests: Wilson coverage, fixed-cases coverage, the drop gate's false-alarm rate (12,000 simulations; the
   6% bound fails if the small-sample correction is removed) and power, and the shock check's false-positive rate.
 
-## 0.2.0 (unreleased)
+## 0.2.0 (not published)
 
 **Gates for evals in CI**
 - `agentstats.toml` policy with tiers (smoke / PR / nightly / release); `agentstats gate` exits 0 pass, 1 fail,
