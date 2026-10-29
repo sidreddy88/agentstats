@@ -1,8 +1,9 @@
 # agentstats
 
 Statistics for agent evals. Point it at your agent's runs (Harbor jobs, ATIF trajectories or a JSONL file) and
-it tells you how good the agent is, how reliable it is, and whether version B is really better than A. Every
-number comes with a confidence interval, and the report says which claim the numbers support.
+it tells you how good the agent is, how reliable it is, whether version B is really better than A, and whether a
+cheaper model is shown to be no worse. Every number comes with a confidence interval, and the report says which
+claim the numbers support.
 
 ```bash
 pip install -e .        # not on PyPI yet
@@ -64,6 +65,12 @@ Other good tools exist (see [Related tools](#related-tools)). agentstats is buil
 5. **Judge checks:** human agreement (Fleiss' κ), judge vs humans (accuracy, strictness, leniency, Cohen's κ,
    each with a CI, on a held-out split if you mark one) and judge consistency over repeated runs (flip rate, mean
    pairwise disagreement).
+6. **Model switches decided by a rule written down first.** `agentstats switch` answers SWITCH / KEEP / NOT YET for
+   moving to a cheaper model: non-inferiority at your margin plus a cost-ratio limit, the model as-is and with an
+   adapted harness, per-slice results, and a warning when the eval set came from the current model.
+   `agentstats preregister` fixes the rule before any result exists, and the decision only counts as pre-registered
+   if the registration was committed before the results and its inputs are unchanged. See
+   [Deciding a model switch](#deciding-a-model-switch-agentstats-preregister-and-agentstats-switch).
 
 ## Example: did giving the fixing agent a diagnosis help?
 
@@ -287,6 +294,10 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
   [arXiv 2602.07150](https://arxiv.org/abs/2602.07150).
 - Judge self-inconsistency: Haldar & Hockenmaier 2025 (EMNLP Findings); Yagubyan 2026,
   [arXiv 2606.13685](https://arxiv.org/abs/2606.13685).
+- Pre-registration (fix the analysis before seeing the data): Nosek et al. 2018, "The preregistration revolution",
+  [PNAS](https://doi.org/10.1073/pnas.1708274114). The switch rule is a standard non-inferiority test (lower interval
+  bound above -margin) on the same fixed-cases interval the gates use.
+- Cost per accepted result rather than cost per call: from Grep AI's "The Managed Agent Wars".
 
 Every statistic is tested against scipy or statsmodels (`tests/test_stats.py`, `tests/test_judge.py`). The only
 runtime dependency is scipy.
@@ -321,6 +332,9 @@ Original to agentstats:
   gates** with Bonferroni-adjusted intervals and named leads;
 - **rules-only rows from traces**: OpenTelemetry (GenAI conventions) and Langfuse exports, so behaviour can be gated on
   production traces that have no labels;
+- **model-switch decisions** (`agentstats switch`): non-inferiority plus cost per accepted result, as-is and adapted
+  steps, an eval-set provenance warning, and **checked pre-registration** (committed before the results, inputs
+  hashed), with a decision record;
 - **calibration tests** that fail if the statistics drift (e.g. the drop gate's false-alarm rate);
 - reading Harbor jobs and ATIF trajectories, and the production results above.
 
@@ -344,5 +358,8 @@ UNHEALTHY on infrastructure failures and keeping them out of pass rates are also
 - Power analysis is by simulation (`agentstats size`) for the two gate rules; no closed-form sample-size planner.
 - The judge check uses the judge's most common verdict per item; it does not correct downstream statistics for
   judge error (evalstats does).
+- `agentstats switch` decides on fixed batches: run both models, then decide. Deciding as runs accumulate
+  (anytime-valid intervals) isn't built. The margin is your judgement; agentstats makes you state it and checks you
+  stated it first. Cost is whatever your rows record (my runs: token counts at list prices, no cache discounts).
 
 MIT licence.
