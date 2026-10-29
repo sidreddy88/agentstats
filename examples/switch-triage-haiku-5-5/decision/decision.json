@@ -1,0 +1,711 @@
+{
+ "name": "triage-haiku45-to-haiku55",
+ "decision": "SWITCH",
+ "reason": "as-is: shown no more than 3 points worse: +2.2 pts (CI -0.7 pts to +5.1 pts, fixed_cases); cost 0.09x (CI 0.09x to 0.10x)",
+ "warnings": [
+  "slices that don't support the decision (reported, not enforced): as-is [template:DEPRECATIONWARNING], as-is [template:ECONNREFUSED], as-is [template:ECS_ERROR], as-is [template:HEALTH_CHECK_TIMEOUT], as-is [template:S3_NO_SUCH_KEY], as-is [template:SYNTAXERROR], as-is [template:TOKENEXPIREDERROR]",
+  "the eval set was created, filtered or labelled by the current model, so the comparison favours it: a SWITCH still holds, a KEEP or NOT YET may overstate the gap"
+ ],
+ "rule": {
+  "margin": 0.03,
+  "max_cost_ratio": 1.0,
+  "conf": 0.95,
+  "max_infra": 0.05,
+  "design": "curated"
+ },
+ "margin_declared_before_results": true,
+ "provenance": "current-model",
+ "slices": {
+  "by": "template",
+  "strict": false
+ },
+ "inputs": {
+  "current": {
+   "path": "~/Production/stepdown/decisions/2026-10-25-triage-haiku-5-5/rows/current.jsonl",
+   "sha256": "eaadfcb37f9d6fce"
+  },
+  "candidate": {
+   "path": "~/Production/stepdown/decisions/2026-10-25-triage-haiku-5-5/rows/candidate.jsonl",
+   "sha256": "863982cc73550280"
+  }
+ },
+ "arms": {
+  "current": {
+   "attempts": 456,
+   "pass_rate": 0.9078947368421053,
+   "cost_per_attempt_usd": 0.006471111842105263,
+   "cost_per_accepted_usd": 0.007127601449275362
+  },
+  "candidate": {
+   "attempts": 456,
+   "pass_rate": 0.9298245614035088,
+   "cost_per_attempt_usd": 0.0006016359649122806,
+   "cost_per_accepted_usd": 0.0006470424528301886
+  }
+ },
+ "steps": [
+  {
+   "name": "as-is",
+   "decision": "SWITCH",
+   "reason": "shown no more than 3 points worse: +2.2 pts (CI -0.7 pts to +5.1 pts, fixed_cases); cost 0.09x (CI 0.09x to 0.10x)",
+   "delta": {
+    "estimate": 0.02193,
+    "low": -0.006766,
+    "high": 0.050625,
+    "method": "fixed_cases",
+    "n": 114,
+    "se": 0.014641,
+    "df": null,
+    "note": "",
+    "z": 1.497862
+   },
+   "cost_ratio": "0.09x (CI 0.09x to 0.10x)",
+   "gate_rows": [
+    {
+     "requirement": "max_infra",
+     "measured": "0.0%",
+     "threshold": "<= 5.0%",
+     "result": "PASS",
+     "detail": ""
+    },
+    {
+     "requirement": "no_regression",
+     "measured": "+2.2 pts (CI -0.7 pts to +5.1 pts, fixed_cases)",
+     "threshold": "lower bound >= -3.0 pts",
+     "result": "PASS",
+     "detail": ""
+    },
+    {
+     "requirement": "max_cost_ratio",
+     "measured": "0.09x (CI 0.09x to 0.10x)",
+     "threshold": "<= 1.00x",
+     "result": "PASS",
+     "detail": ""
+    }
+   ],
+   "slices": {
+    "APP_CRASHED": {
+     "name": "as-is [template:APP_CRASHED]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases); cost 0.10x (CI 0.09x to 0.10x)",
+     "delta": {
+      "estimate": 0.0,
+      "low": 0.0,
+      "high": 0.0,
+      "method": "fixed_cases",
+      "n": 6,
+      "se": 0.0,
+      "df": null,
+      "note": "every case gave the same result on every trial; nothing varies",
+      "z": 0.0
+     },
+     "cost_ratio": "0.10x (CI 0.09x to 0.10x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.10x (CI 0.09x to 0.10x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "AXIOSERROR": {
+     "name": "as-is [template:AXIOSERROR]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases); cost 0.08x (CI 0.08x to 0.09x)",
+     "delta": {
+      "estimate": 0.0,
+      "low": 0.0,
+      "high": 0.0,
+      "method": "fixed_cases",
+      "n": 2,
+      "se": 0.0,
+      "df": null,
+      "note": "every case gave the same result on every trial; nothing varies",
+      "z": 0.0
+     },
+     "cost_ratio": "0.08x (CI 0.08x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.08x (CI 0.08x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "CASTERROR": {
+     "name": "as-is [template:CASTERROR]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases); cost 0.10x (CI 0.10x to 0.10x)",
+     "delta": {
+      "estimate": 0.0,
+      "low": 0.0,
+      "high": 0.0,
+      "method": "fixed_cases",
+      "n": 13,
+      "se": 0.0,
+      "df": null,
+      "note": "every case gave the same result on every trial; nothing varies",
+      "z": 0.0
+     },
+     "cost_ratio": "0.10x (CI 0.10x to 0.10x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.10x (CI 0.10x to 0.10x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "DEPRECATIONWARNING": {
+     "name": "as-is [template:DEPRECATIONWARNING]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (+12.5 pts (CI -12.0 pts to +37.0 pts, fixed_cases)): about 10 runs per arm would settle it if the estimate holds",
+     "delta": {
+      "estimate": 0.125,
+      "low": -0.119995,
+      "high": 0.369995,
+      "method": "fixed_cases",
+      "n": 2,
+      "se": 0.125,
+      "df": null,
+      "note": "",
+      "z": 1.0
+     },
+     "cost_ratio": "0.09x (CI 0.08x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+12.5 pts (CI -12.0 pts to +37.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "INCONCLUSIVE",
+       "detail": "about 10 runs per arm would settle it if the estimate holds"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.09x (CI 0.08x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "ECONNREFUSED": {
+     "name": "as-is [template:ECONNREFUSED]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (+100.0 pts (CI +25.9 pts to +100.0 pts, fixed_cases)): cost: not enough matched cases with this metric",
+     "delta": {
+      "estimate": 1.0,
+      "low": 0.259203,
+      "high": 1.0,
+      "method": "fixed_cases",
+      "n": 1,
+      "se": 0.377964,
+      "df": null,
+      "note": "clipped to the possible range",
+      "z": 2.645751
+     },
+     "cost_ratio": "n/a",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+100.0 pts (CI +25.9 pts to +100.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "n/a",
+       "threshold": "<= 1.00x",
+       "result": "INCONCLUSIVE",
+       "detail": "not enough matched cases with this metric"
+      }
+     ],
+     "slices": {}
+    },
+    "ECS_ERROR": {
+     "name": "as-is [template:ECS_ERROR]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (-1.8 pts (CI -5.3 pts to +1.7 pts, fixed_cases)): about 34 runs per arm would settle it if the estimate holds",
+     "delta": {
+      "estimate": -0.017857,
+      "low": -0.052856,
+      "high": 0.017142,
+      "method": "fixed_cases",
+      "n": 14,
+      "se": 0.017857,
+      "df": null,
+      "note": "",
+      "z": -1.0
+     },
+     "cost_ratio": "0.09x (CI 0.08x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "-1.8 pts (CI -5.3 pts to +1.7 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "INCONCLUSIVE",
+       "detail": "about 34 runs per arm would settle it if the estimate holds"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.09x (CI 0.08x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "HEALTH_CHECK_TIMEOUT": {
+     "name": "as-is [template:HEALTH_CHECK_TIMEOUT]",
+     "decision": "KEEP",
+     "reason": "worse than the margin even at the optimistic end: -41.7 pts (CI -70.3 pts to -13.0 pts, fixed_cases)",
+     "delta": {
+      "estimate": -0.416667,
+      "low": -0.702911,
+      "high": -0.130422,
+      "method": "fixed_cases",
+      "n": 6,
+      "se": 0.146046,
+      "df": null,
+      "note": "",
+      "z": -2.852987
+     },
+     "cost_ratio": "0.10x (CI 0.09x to 0.11x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "-41.7 pts (CI -70.3 pts to -13.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "FAIL",
+       "detail": "worse than the baseline by more than the margin"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.10x (CI 0.09x to 0.11x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "HEAP_OUT_OF_MEMORY": {
+     "name": "as-is [template:HEAP_OUT_OF_MEMORY]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +18.2 pts (CI +6.0 pts to +30.3 pts, fixed_cases); cost 0.08x (CI 0.08x to 0.09x)",
+     "delta": {
+      "estimate": 0.181818,
+      "low": 0.06041,
+      "high": 0.303226,
+      "method": "fixed_cases",
+      "n": 11,
+      "se": 0.061944,
+      "df": null,
+      "note": "",
+      "z": 2.935198
+     },
+     "cost_ratio": "0.08x (CI 0.08x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+18.2 pts (CI +6.0 pts to +30.3 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.08x (CI 0.08x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "MODULE_NOT_FOUND": {
+     "name": "as-is [template:MODULE_NOT_FOUND]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +10.0 pts (CI -2.8 pts to +22.8 pts, fixed_cases); cost 0.11x (CI 0.09x to 0.12x)",
+     "delta": {
+      "estimate": 0.1,
+      "low": -0.02831,
+      "high": 0.22831,
+      "method": "fixed_cases",
+      "n": 5,
+      "se": 0.065465,
+      "df": null,
+      "note": "",
+      "z": 1.527525
+     },
+     "cost_ratio": "0.11x (CI 0.09x to 0.12x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+10.0 pts (CI -2.8 pts to +22.8 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.11x (CI 0.09x to 0.12x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "MONGO_CONNECTION_REFUSED": {
+     "name": "as-is [template:MONGO_CONNECTION_REFUSED]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +66.7 pts (CI +27.6 pts to +100.0 pts, fixed_cases); cost 0.09x (CI 0.07x to 0.11x)",
+     "delta": {
+      "estimate": 0.666667,
+      "low": 0.276232,
+      "high": 1.0,
+      "method": "fixed_cases",
+      "n": 3,
+      "se": 0.199205,
+      "df": null,
+      "note": "clipped to the possible range",
+      "z": 3.34664
+     },
+     "cost_ratio": "0.09x (CI 0.07x to 0.11x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+66.7 pts (CI +27.6 pts to +100.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.09x (CI 0.07x to 0.11x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "NULL_PTR": {
+     "name": "as-is [template:NULL_PTR]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases); cost 0.08x (CI 0.07x to 0.09x)",
+     "delta": {
+      "estimate": 0.0,
+      "low": 0.0,
+      "high": 0.0,
+      "method": "fixed_cases",
+      "n": 6,
+      "se": 0.0,
+      "df": null,
+      "note": "every case gave the same result on every trial; nothing varies",
+      "z": 0.0
+     },
+     "cost_ratio": "0.08x (CI 0.07x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI +0.0 pts to +0.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.08x (CI 0.07x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "PROCESS_KILLED": {
+     "name": "as-is [template:PROCESS_KILLED]",
+     "decision": "SWITCH",
+     "reason": "shown no more than 3 points worse: +15.0 pts (CI -2.0 pts to +32.0 pts, fixed_cases); cost 0.11x (CI 0.10x to 0.11x)",
+     "delta": {
+      "estimate": 0.15,
+      "low": -0.019738,
+      "high": 0.319738,
+      "method": "fixed_cases",
+      "n": 5,
+      "se": 0.086603,
+      "df": null,
+      "note": "",
+      "z": 1.732051
+     },
+     "cost_ratio": "0.11x (CI 0.10x to 0.11x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+15.0 pts (CI -2.0 pts to +32.0 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.11x (CI 0.10x to 0.11x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "S3_NO_SUCH_KEY": {
+     "name": "as-is [template:S3_NO_SUCH_KEY]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (-6.2 pts (CI -11.4 pts to -1.1 pts, fixed_cases)): the estimate itself is below the margin; more runs are unlikely to make this pass",
+     "delta": {
+      "estimate": -0.0625,
+      "low": -0.114057,
+      "high": -0.010943,
+      "method": "fixed_cases",
+      "n": 20,
+      "se": 0.026305,
+      "df": null,
+      "note": "",
+      "z": -2.375955
+     },
+     "cost_ratio": "0.09x (CI 0.08x to 0.10x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "-6.2 pts (CI -11.4 pts to -1.1 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "INCONCLUSIVE",
+       "detail": "the estimate itself is below the margin; more runs are unlikely to make this pass"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.09x (CI 0.08x to 0.10x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "SYNTAXERROR": {
+     "name": "as-is [template:SYNTAXERROR]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (+0.0 pts (CI -7.7 pts to +7.7 pts, fixed_cases)): about 27 runs per arm would settle it if the estimate holds",
+     "delta": {
+      "estimate": 0.0,
+      "low": -0.076995,
+      "high": 0.076995,
+      "method": "fixed_cases",
+      "n": 9,
+      "se": 0.039284,
+      "df": null,
+      "note": "",
+      "z": 0.0
+     },
+     "cost_ratio": "0.09x (CI 0.08x to 0.09x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI -7.7 pts to +7.7 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "INCONCLUSIVE",
+       "detail": "about 27 runs per arm would settle it if the estimate holds"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.09x (CI 0.08x to 0.09x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    },
+    "TOKENEXPIREDERROR": {
+     "name": "as-is [template:TOKENEXPIREDERROR]",
+     "decision": "NOT YET",
+     "reason": "can't tell yet (+0.0 pts (CI -8.6 pts to +8.6 pts, fixed_cases)): about 33 runs per arm would settle it if the estimate holds",
+     "delta": {
+      "estimate": 0.0,
+      "low": -0.085849,
+      "high": 0.085849,
+      "method": "fixed_cases",
+      "n": 11,
+      "se": 0.043801,
+      "df": null,
+      "note": "",
+      "z": 0.0
+     },
+     "cost_ratio": "0.10x (CI 0.09x to 0.12x)",
+     "gate_rows": [
+      {
+       "requirement": "max_infra",
+       "measured": "0.0%",
+       "threshold": "<= 5.0%",
+       "result": "PASS",
+       "detail": ""
+      },
+      {
+       "requirement": "no_regression",
+       "measured": "+0.0 pts (CI -8.6 pts to +8.6 pts, fixed_cases)",
+       "threshold": "lower bound >= -3.0 pts",
+       "result": "INCONCLUSIVE",
+       "detail": "about 33 runs per arm would settle it if the estimate holds"
+      },
+      {
+       "requirement": "max_cost_ratio",
+       "measured": "0.10x (CI 0.09x to 0.12x)",
+       "threshold": "<= 1.00x",
+       "result": "PASS",
+       "detail": ""
+      }
+     ],
+     "slices": {}
+    }
+   }
+  }
+ ],
+ "note": "Pre-registered in preregistration.md (stepdown 48019b0). agent-platform commit 4d60f56 (branch feat/triage-haiku-5-5); labels sha256 3125868d99de2502; both arms same local session, 4 trials x 114 cases.",
+ "versions": {
+  "stepdown": "0.1.0",
+  "agentstats": "0.2.0"
+ },
+ "decided_at": "2026-10-26T02:44:15+00:00"
+}

@@ -11,6 +11,9 @@ agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
+agentstats preregister --name my-switch --margin 0.03 --provenance independent --out decisions/my-switch
+agentstats switch --prereg decisions/my-switch/prereg.json --current current.jsonl --candidate cheap.jsonl \
+    --out decisions/my-switch
 ```
 
 ## Why
@@ -143,6 +146,48 @@ lookup was called in 52.5% (CI 40.2% to 64.5%). The rules now run in that agent'
   wasn't trusted (see the example above).
 
 
+
+## Deciding a model switch: `agentstats preregister` and `agentstats switch`
+
+A cheaper model comes out. "No significant difference" on one eval run isn't "no worse": a small run usually just has
+a wide interval. `agentstats switch` asks the question the other way round, as a non-inferiority test: is the cheaper
+model **shown** to lose no more than your margin, at no higher cost? It answers **SWITCH**, **KEEP** or **NOT YET**
+and writes a decision record (`decision.json` + `decision.md`) with the rule, the numbers and hashes of the inputs.
+
+```bash
+agentstats preregister --name my-switch --margin 0.03 --provenance independent \
+    --input labels=evals/labels.jsonl --slice-by template --out decisions/my-switch
+git add decisions/my-switch && git commit -m "pre-register my-switch"     # before running anything
+# ... run both models on the same cases, a few trials each, same session ...
+agentstats switch --prereg decisions/my-switch/prereg.json \
+    --current current.jsonl --candidate cheap.jsonl [--adapted cheap-adapted.jsonl] --out decisions/my-switch
+```
+
+| Interval for (candidate - current) | Decision |
+|---|---|
+| lower bound above -margin, and the cost ratio's upper bound at most `--max-cost-ratio` (default 1.0) | SWITCH |
+| upper bound below -margin (worse even at the optimistic end), or more expensive | KEEP |
+| anything else | NOT YET |
+
+- **Pre-registration is checked, not trusted.** With `--prereg` the rule comes from the file (contradicting flags are
+  an error), and the decision only counts as pre-registered if the registration is committed and unchanged, was
+  committed before every result file was last modified, and every declared `--input` still has its registered hash.
+- **Two steps:** the cheaper model as-is, then with an adapted harness (`--adapted`, e.g. rows from
+  `harness-evolve export`); the better decision wins.
+- **Slices** (`--slice-by`) are reported per slice; `--strict-slices` makes the decision no better than the worst one.
+- **Provenance:** `--provenance current-model` says the eval set was made or filtered with the current model, and the
+  record warns that the comparison favours it.
+- **Cost per accepted result** is reported for each arm. Exit codes: 0 SWITCH, 1 KEEP, 2 NOT YET, 3 UNHEALTHY.
+
+**In production:** my triage agent moved from Claude Haiku 4.5 to Haiku 5.5 on a pre-registered decision: +2.2 pts
+(95% CI -0.7 to +5.1) at 0.09x the cost per accepted result. An earlier comparison had said 10 points worse; the gap
+came from labels that repeated counts the old model made up. Rule, rows and record:
+[examples/switch-triage-haiku-5-5](examples/switch-triage-haiku-5-5/).
+
+These two commands started as a separate package, stepdown. They're a thin layer on agentstats' own tests, so they
+live here for now. If the model-switch side grows into its own system (suggesting candidate models, adapting the
+harness with harness-evolve, deciding as runs accumulate, shadow runs on live traffic), it may become a separate
+package again.
 
 ## Evals in CI, in tiers
 
