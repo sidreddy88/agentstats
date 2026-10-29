@@ -6,7 +6,7 @@ cheaper model is shown to be no worse. Every number comes with a confidence inte
 claim the numbers support.
 
 ```bash
-pip install -e .        # not on PyPI yet
+pip install agentstats        # Python 3.11+
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
@@ -189,7 +189,7 @@ agentstats switch --prereg decisions/my-switch/prereg.json \
 **In production:** my triage agent moved from Claude Haiku 4.5 to Haiku 5.5 on a pre-registered decision: +2.2 pts
 (95% CI -0.7 to +5.1) at 0.09x the cost per accepted result. An earlier comparison had said 10 points worse; the gap
 came from labels that repeated counts the old model made up. Rule, rows and record:
-[examples/switch-triage-haiku-5-5](examples/switch-triage-haiku-5-5/).
+[examples/switch-triage-haiku-5-5](https://github.com/sidreddy88/agentstats/tree/main/examples/switch-triage-haiku-5-5).
 
 These two commands started as a separate package, stepdown. They're a thin layer on agentstats' own tests, so they
 live here for now. If the model-switch side grows into its own system (suggesting candidate models, adapting the
