@@ -6,7 +6,8 @@
 - Inspect AI eval logs (`.eval` and `.json`): read directly by every command, or `agentstats convert --format inspect`
   with `--scorer`, `--pass-threshold`, `--errors {infra,fail}`, `--rules`, `--arm`. One row per sample and epoch;
   sample errors are infrastructure failures by default; limits and N scores become `no_answer`; tool calls feed rule
-  checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency).
+  checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency). A log where no sample
+  was scored (e.g. every sample errored) reads as infrastructure failures instead of failing on scorer choice.
 
 **Eval sets**
 - `agentstats promote find` / `promote accept`: failures (failed verdicts, or rule violations on rules-only production

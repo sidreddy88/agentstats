@@ -96,6 +96,18 @@ def test_no_answer_and_limits():
     assert rows["t1"].no_answer == "limit_message"
 
 
+def test_a_log_where_every_sample_errored_reads_as_infrastructure_failures():
+    log = json.loads(TOOLS.read_text())
+    log["status"] = "error"
+    log.pop("results", None)
+    for s in log["samples"]:
+        s.pop("scores", None)
+        s["error"] = {"message": "BadRequestError: Unable to access non-serverless model"}
+    rows = inspect_logs.to_attempts(log)
+    assert len(rows) == 4 and all(r.infra_error and "non-serverless" in r.infra_error for r in rows)
+    assert not any(r.valid for r in rows)
+
+
 def test_records_load_reads_inspect_logs_directly(tmp_path):
     assert inspect_logs.is_inspect_log(EPOCHS) and not inspect_logs.is_inspect_log(FIX / "langfuse_traces.json")
     assert len(records.load(EPOCHS)) == 12
