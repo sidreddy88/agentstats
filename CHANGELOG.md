@@ -8,6 +8,13 @@
   sample errors are infrastructure failures by default; limits and N scores become `no_answer`; tool calls feed rule
   checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency).
 
+**Judges**
+- `agentstats review sample` / `review import`: sampled human review of graded attempts. The sample favours attempts
+  where the verdict and the behaviour rules disagree, then failures, then passes, spread over a tag (`--stratify-by`);
+  the sheet (CSV) is blind, with verdicts, strata and sampling weights in a separate key. Import writes label rows for
+  `agentstats judge` and reports agreement, leniency and strictness on the sample and reweighted to the population
+  (stratified bootstrap 95% intervals).
+
 ## 0.3.0 (2026-10-29)
 
 First release on PyPI.
