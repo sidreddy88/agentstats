@@ -1,5 +1,5 @@
 """
-Release-process tiers, from a TOML policy file (after Yesha Shah, "Agentic Evals" Part 1: evals in CI in tiers).
+Release-process tiers (evals in CI: smoke, nightly, release), from a TOML policy file.
 
     design = "curated"              # how the eval set was built (see analysis.py)
 
