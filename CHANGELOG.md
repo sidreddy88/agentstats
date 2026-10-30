@@ -3,6 +3,8 @@
 ## Unreleased
 
 **Statistics**
+- The sampled design no longer crashes on rules-only rows (no verdicts at all); it reports the rule checks like the
+  curated design does. Found by agent-platform's weekly monitoring job.
 - Few failures: when either outcome is rare (under 10 failures, or passes, across both arms) the fixed-cases test
   falls back to Newcombe's hybrid score interval on the pooled counts. Before, no failures at all gave a zero-width
   interval (+0.0 to +0.0), so `switch` could say SWITCH on 120 vs 120 passes and rule comparisons looked exact. In

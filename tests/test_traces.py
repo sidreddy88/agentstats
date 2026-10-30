@@ -13,6 +13,15 @@ RULES = [{"name": "called_count", "called": "get_occurrence_count"},
          {"name": "called_dup", "called": "check_duplicate_pr"}]
 
 
+def test_sampled_design_summarizes_rules_only_rows():
+    """Rules-only production rows (no verdicts at all) used to crash the sampled design (KeyError 'per_case')."""
+    from agentstats import analysis
+    from agentstats.records import from_dict
+    rows = [from_dict({"case": f"t{i}", "passed": None, "checks": {"r": i % 4 != 0}}) for i in range(12)]
+    res = analysis.summarize(rows, design="sampled")
+    assert res["checks"]["r"]["estimate"] == 0.75
+
+
 def test_otlp_traces_become_rows_with_tool_calls_tokens_and_latency():
     rows = traces.convert([FIX / "otlp_traces.json"], "otlp", rules=RULES)
     by_id = {r.metrics["latency_s"]: r for r in rows}
