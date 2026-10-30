@@ -10,6 +10,7 @@ pip install agentstats        # Python 3.11+
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
+agentstats grade items.jsonl --rubric rubric.json --model MODEL --base-url URL --repeats 3 --out labels.jsonl
 agentstats judge labels.jsonl
 agentstats promote find prod_rows.jsonl --source production --existing evals/cases.jsonl --out candidates.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
@@ -287,6 +288,15 @@ is `no_answer: limit_<type>`. Tool calls from the assistant messages fill `--rul
 tool calls become metrics; task, model and scalar sample metadata become tags (so `slice_by = "intent"` works).
 `.eval` files are zstd-compressed: they're read with inspect-ai's own reader when it's installed, or the standard
 library on Python 3.14+; otherwise `inspect log convert --to json` first.
+
+**LLM judge on yes/no rubric questions** (`agentstats grade items.jsonl --rubric rubric.json --model MODEL
+--base-url URL --api-key-env VAR --repeats 3 --out labels.jsonl --rows rows.jsonl`): items are
+`{"item", "input", "output", ...}` (every field but ids and tags is shown to the judge, or `--fields`); the rubric is a
+list of `{"name", "question", "pass": "yes"|"no"}`, and an item passes when every question gets its passing answer.
+Any OpenAI-compatible endpoint, called with the standard library. A reply that isn't the JSON asked for is recorded
+as `na`, never a silent pass; transport errors are retried, then recorded as infrastructure errors. Repeats are judge
+labels (for `agentstats judge`'s flip rate), never extra attempts; `--rows` writes one attempt row per item with the
+per-question majority as checks, so a rubric question can be gated like a behaviour rule.
 
 **Sampled human review** (`agentstats review sample ROWS --n 40 --stratify-by intent --link URL --out DIR`, then
 `agentstats review import DIR/review.csv --key DIR/key.jsonl --rater NAME --out labels.jsonl`): picks graded attempts

@@ -15,6 +15,10 @@
   labelled most of the eval set.
 
 **Judges**
+- `agentstats grade`: an LLM judge on binary rubric questions over any OpenAI-compatible endpoint (standard library,
+  own User-Agent: Together's edge returns 403 to Python's default one). Writes judge label rows (each repeat, for
+  consistency) and, with `--rows`, attempt rows whose checks are the per-question majority. Unparsed replies are `na`,
+  transport failures infrastructure errors.
 - `agentstats review sample` / `review import`: sampled human review of graded attempts. The sample favours attempts
   where the verdict and the behaviour rules disagree, then failures, then passes, spread over a tag (`--stratify-by`);
   the sheet (CSV) is blind, with verdicts, strata and sampling weights in a separate key. Import writes label rows for
