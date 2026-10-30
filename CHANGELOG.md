@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+**Example**
+- `examples/acme/`: "a week at Acme", two real agents (a tool-calling support agent with OpenTelemetry traces, an
+  Inspect AI coding agent) through the whole back half: smoke and nightly gates, behaviour rules on production traces,
+  an unavailable model reading as UNHEALTHY, the rubric judge, sampled human review, promote, and a model switch.
+  Replays from recorded runs with no API keys (`bash week.sh`). The README records what went wrong while building it.
+
 **Inputs**
 - Inspect AI eval logs (`.eval` and `.json`): read directly by every command, or `agentstats convert --format inspect`
   with `--scorer`, `--pass-threshold`, `--errors {infra,fail}`, `--rules`, `--arm`. One row per sample and epoch;
   sample errors are infrastructure failures by default; limits and N scores become `no_answer`; tool calls feed rule
-  checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency).
+  checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency). A log where no sample
+  was scored (e.g. every sample errored) reads as infrastructure failures instead of failing on scorer choice.
 
 **Eval sets**
 - `agentstats promote find` / `promote accept`: failures (failed verdicts, or rule violations on rules-only production
@@ -18,7 +25,8 @@
 - `agentstats grade`: an LLM judge on binary rubric questions over any OpenAI-compatible endpoint (standard library,
   own User-Agent: Together's edge returns 403 to Python's default one). Writes judge label rows (each repeat, for
   consistency) and, with `--rows`, attempt rows whose checks are the per-question majority. Unparsed replies are `na`,
-  transport failures infrastructure errors.
+  transport failures infrastructure errors. Warns when a question's name is negated (`no_...`) and its passing answer
+  is "no": on a real run such a double negative made the judge flip between yes and no on the same reply.
 - `agentstats review sample` / `review import`: sampled human review of graded attempts. The sample favours attempts
   where the verdict and the behaviour rules disagree, then failures, then passes, spread over a tag (`--stratify-by`);
   the sheet (CSV) is blind, with verdicts, strata and sampling weights in a separate key. Import writes label rows for

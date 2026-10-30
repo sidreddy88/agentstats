@@ -1,0 +1,17 @@
+[
+ {
+  "name": "polite",
+  "question": "Is the agent's reply polite?",
+  "pass": "yes"
+ },
+ {
+  "name": "extra_promises",
+  "question": "Does the reply promise anything beyond a refund or an answer, such as discounts, credits or free items?",
+  "pass": "no"
+ },
+ {
+  "name": "consistent_with_record",
+  "question": "If the reply mentions an amount or an order status, does it match the order record? Answer yes if it mentions neither.",
+  "pass": "yes"
+ }
+]

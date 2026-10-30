@@ -21,6 +21,11 @@ agentstats switch --prereg decisions/my-switch/prereg.json --current current.jso
     --out decisions/my-switch
 ```
 
+**See it on two real agents:** [examples/acme](https://github.com/sidreddy88/agentstats/tree/main/examples/acme)
+replays "a week at Acme" (a support agent and an Inspect coding agent) from recorded runs: a PR blocked at smoke, a
+nightly regression found by slice, a lenient LLM judge caught by sampled human review, production failures promoted
+into the eval set, and a model switch. `bash week.sh`, no API keys.
+
 ## Why
 
 Agents are stochastic, so a single eval run is a sample, not a measurement. On 100 SWE-bench Verified tasks, the

@@ -76,7 +76,8 @@ def scorer_names(log: dict) -> list[str]:
     return names
 
 
-def pick_scorer(log: dict, scorer: str | None) -> str:
+def pick_scorer(log: dict, scorer: str | None) -> str | None:
+    """The scorer that decides pass/fail; None when no sample was scored (e.g. every sample errored)."""
     names = scorer_names(log)
     if scorer:
         if scorer not in names:
@@ -87,6 +88,8 @@ def pick_scorer(log: dict, scorer: str | None) -> str:
         return headline
     if len(names) == 1:
         return names[0]
+    if not names:
+        return None
     raise ValueError(f"the log has several scorers {names}: choose one with --scorer")
 
 
@@ -159,7 +162,7 @@ def to_attempts(log: dict, *, scorer: str | None = None, pass_threshold: float =
         row = {"arm": arm, "case": str(s["id"]), "run": int(s.get("epoch") or 1), "passed": None, "infra_error": None,
                "tags": _tags(log, s), "checks": run_checks(rules, calls) if rules else {}, **_metrics(s, calls)}
         error = s.get("error")
-        score = (s.get("scores") or {}).get(name)
+        score = (s.get("scores") or {}).get(name) if name else None
         if error:
             message = str(error.get("message") or error) if isinstance(error, dict) else str(error)
             if errors == "infra":

@@ -1,0 +1,9 @@
+[
+ {
+  "name": "lookup_before_refund",
+  "before": [
+   "lookup_order",
+   "issue_refund"
+  ]
+ }
+]
