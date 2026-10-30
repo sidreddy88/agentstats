@@ -11,6 +11,7 @@ agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
 agentstats judge labels.jsonl
+agentstats promote find prod_rows.jsonl --source production --existing evals/cases.jsonl --out candidates.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
 agentstats summary logs/my-task.eval                     # Inspect AI logs are read directly
@@ -295,6 +296,17 @@ violated, or failed with every rule satisfied), then failures, then passes, spre
 label rows for `agentstats judge` and reports the grader's agreement, leniency and strictness both on the sample and
 **reweighted to the population** (over-sampling disagreements would otherwise make the grader look worse than it is),
 with stratified bootstrap intervals.
+
+**Failures become eval cases** (`agentstats promote find ROWS --source production --label-from none --existing
+evals/cases.jsonl --group-by intent --out candidates.jsonl`, then `agentstats promote accept candidates.jsonl --into
+evals/cases.jsonl`): failures from eval runs, or rule violations on rules-only production rows, are grouped by
+signature (the rules that broke, the no-answer reason, optionally a slice tag), so one failure seen thirty times is one
+signature with up to `--per-signature` candidate cases (the most frequent first). Cases already in the eval set are
+skipped. Each candidate is tagged `source:`, `found:` and `label:` (`human`, `none`, or `model:<name>`); a person sets
+`"approved": true` and `accept` appends those to the cases file (the one `agentstats sample` reads) and prints the eval
+set's provenance mix, warning when most labels came from one model: comparisons against that model are then tilted
+in its favour, because its own answers are the answer key. agentstats keeps only case ids and tags; the inputs and
+expected answers go in your runner's dataset.
 
 Judge labels (`agentstats judge`), one row per verdict:
 
