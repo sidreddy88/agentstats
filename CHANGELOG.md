@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Inputs**
+- Inspect AI eval logs (`.eval` and `.json`): read directly by every command, or `agentstats convert --format inspect`
+  with `--scorer`, `--pass-threshold`, `--errors {infra,fail}`, `--rules`, `--arm`. One row per sample and epoch;
+  sample errors are infrastructure failures by default; limits and N scores become `no_answer`; tool calls feed rule
+  checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency).
+
 ## 0.3.0 (2026-10-29)
 
 First release on PyPI.

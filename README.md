@@ -12,6 +12,7 @@ agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats judge labels.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
+agentstats summary logs/my-task.eval                     # Inspect AI logs are read directly
 agentstats preregister --name my-switch --margin 0.03 --provenance independent --out decisions/my-switch
 agentstats switch --prereg decisions/my-switch/prereg.json --current current.jsonl --candidate cheap.jsonl \
     --out decisions/my-switch
@@ -36,7 +37,8 @@ Three other things go wrong in practice:
 
 Other good tools exist (see [Related tools](#related-tools)). agentstats is built around agent runs:
 
-1. **Reads trajectories, not score tables.** Harbor job directories and ATIF trajectories directly: pass/fail,
+1. **Reads trajectories, not score tables.** Harbor job directories, ATIF trajectories, Inspect AI logs and
+   OpenTelemetry/Langfuse traces directly: pass/fail,
    infrastructure errors, tokens, cost, latency, steps and tool calls, plus deterministic rule checks on the
    tool calls (`called`, `not_called`, `before`, `args`).
 2. **Picks the statistics from how the eval set was built, and says what claim they support.**
@@ -273,6 +275,16 @@ tokens from `gen_ai.usage.*`) or a Langfuse export (traces with their observatio
 calls). One trace is one attempt; `--rules` fills its checks. Pass/fail comes from `--verdicts` (JSONL with
 `trace_id`, `passed`, optional `case`, `run`, `infra_error`); without it the rows are **rules-only**: no pass rate, but
 the rule gates work, which is what production traces without labels need.
+
+**From Inspect AI logs** (`.eval` or `.json`; read directly by every command, or
+`agentstats convert --format inspect LOG --rules rules.json --out rows.jsonl`): one row per sample and epoch (case =
+sample id, run = epoch, arm = model or `--arm`). Pass/fail comes from the headline scorer or `--scorer`: C passes; I
+and P fail; N fails as `no_answer`; numbers pass at `--pass-threshold` (default 1.0). A sample that errored is an
+infrastructure failure by default (`--errors fail` counts it as a failure); a sample that hit a limit and didn't pass
+is `no_answer: limit_<type>`. Tool calls from the assistant messages fill `--rules` checks; tokens, time, steps and
+tool calls become metrics; task, model and scalar sample metadata become tags (so `slice_by = "intent"` works).
+`.eval` files are zstd-compressed: they're read with inspect-ai's own reader when it's installed, or the standard
+library on Python 3.14+; otherwise `inspect log convert --to json` first.
 
 Judge labels (`agentstats judge`), one row per verdict:
 
