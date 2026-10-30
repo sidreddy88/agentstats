@@ -339,8 +339,6 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
 - Few failures (fewer than 10 of either outcome across both arms): Newcombe's hybrid score interval for a difference
   of proportions (method 10), Newcombe 1998, [Statistics in Medicine 17:873-890](https://doi.org/10.1002/(SICI)1097-0258(19980430)17:8%3C873::AID-SIM779%3E3.0.CO;2-I),
   instead of a normal approximation that collapses to zero width when nothing fails.
-- Choosing the method by how the eval set was built, evals in CI tiers, judge alignment and consistency metrics:
-  Yesha Shah's "Agentic Evals" series (see [Credits](#credits)).
 - pass@k: Chen et al. 2021, [arXiv 2107.03374](https://arxiv.org/abs/2107.03374). pass^k: τ-bench, Yao et al.,
   [arXiv 2406.12045](https://arxiv.org/abs/2406.12045). Randomness in agentic evals: Bjarnason et al. 2026,
   [arXiv 2602.07150](https://arxiv.org/abs/2602.07150).
@@ -354,24 +352,10 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
 Every statistic is tested against scipy or statsmodels (`tests/test_stats.py`, `tests/test_judge.py`). The only
 runtime dependency is scipy.
 
-## Credits
+## What's original to agentstats
 
-The framing behind several features comes from Yesha Shah's **Agentic Evals** series:
-[Part 1, "A Software Engineer's Guide"](https://yeshas93.substack.com/p/agentic-evals-a-software-engineers)
-(2026-09-21); [Part 2, "Statistical Tools for Measuring Agent Performance"](https://yeshas93.substack.com/p/agentic-evals-statistical-tools-for)
-(2026-09-30); [Part 3, "Introduction to Autoraters"](https://substack.com/home/post/p-220996535) (2026-10-19):
-
-- choosing the statistics by how the eval set was built (benchmark vs generalised performance; curated, sampled and
-  correlated eval sets);
-- pass@k and pass^k for agents, and reporting intervals rather than single runs;
-- evals in CI in tiers (smoke, nightly, release), a stratified smoke sample, and rule-based checks on trajectories;
-- the judge checks: strictness, leniency, Cohen's and Fleiss' κ, a held-out split, verdict flip rate and mean pairwise
-  disagreement.
-
-The statistical methods themselves come from the papers listed under [Methods and sources](#methods-and-sources),
-which the series also cites.
-
-Original to agentstats:
+The statistical methods come from the papers listed under [Methods and sources](#methods-and-sources). Original
+to agentstats:
 
 - the fixed-cases test with its small-sample correction (from a production diagnosis regression gate), and the
   run-wide shock check;

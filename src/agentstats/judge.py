@@ -1,5 +1,5 @@
 """
-Can you trust your autorater (LLM judge)? Three checks, after Yesha Shah's "Agentic Evals" Part 3.
+Can you trust your autorater (LLM judge)? Three checks.
 
 Input rows: {"item": "...", "rater": "human:alice" | "judge", "verdict": "pass" | "fail" | "na",
              "run": 1, "split": "tune" | "heldout"}

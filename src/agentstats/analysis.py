@@ -2,7 +2,7 @@
 Summaries and comparisons that pick their statistics from how the eval set was built, and say which claim the
 numbers support.
 
-Eval set designs (after Yesha Shah, "Agentic Evals" Part 2, and Miller 2024, arXiv 2411.00640):
+Eval set designs (after Miller 2024, arXiv 2411.00640):
   curated    Hand-picked cases (most eval sets and benchmarks). Cases aren't a random sample of anything bigger,
              so the claim is "on this eval set": the cases are fixed and the only randomness is the agent's own,
              measured from repeated trials of each case (comparisons.fixed_cases). If whole runs vary more than
