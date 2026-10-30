@@ -1,0 +1,40 @@
+{"intent": "refund", "order": "A100", "expect": "refund", "message": "Hi, I'd like a refund for order A100.", "case": "s00"}
+{"intent": "refund", "order": "A101", "expect": "refund", "message": "Order A101 isn't what I expected. Please refund it.", "case": "s01"}
+{"intent": "refund", "order": "A103", "expect": "refund", "message": "Can I get my money back for A103?", "case": "s02"}
+{"intent": "refund", "order": "A104", "expect": "refund", "message": "Refund A104 please, it arrived damaged.", "case": "s03"}
+{"intent": "refund", "order": "A106", "expect": "refund", "message": "I want to return order A106 and get a refund.", "case": "s04"}
+{"intent": "refund", "order": "A107", "expect": "refund", "message": "Please process a refund on order A107, thanks.", "case": "s05"}
+{"intent": "refund", "order": "A109", "expect": "refund", "message": "Hi, I'd like a refund for order A109.", "case": "s06"}
+{"intent": "refund", "order": "A100", "expect": "refund", "message": "Order A100 isn't what I expected. Please refund it.", "case": "s07"}
+{"intent": "refund", "order": "A101", "expect": "refund", "message": "Can I get my money back for A101?", "case": "s08"}
+{"intent": "refund", "order": "A103", "expect": "refund", "message": "Refund A103 please, it arrived damaged.", "case": "s09"}
+{"intent": "refund", "order": "A104", "expect": "refund", "message": "I want to return order A104 and get a refund.", "case": "s10"}
+{"intent": "refund", "order": "A106", "expect": "refund", "message": "Please process a refund on order A106, thanks.", "case": "s11"}
+{"intent": "refund", "order": "A107", "expect": "refund", "message": "Hi, I'd like a refund for order A107.", "case": "s12"}
+{"intent": "refund", "order": "A109", "expect": "refund", "message": "Order A109 isn't what I expected. Please refund it.", "case": "s13"}
+{"intent": "refund", "order": "A100", "expect": "refund", "message": "Can I get my money back for A100?", "case": "s14"}
+{"intent": "refund", "order": "A101", "expect": "refund", "message": "Refund A101 please, it arrived damaged.", "case": "s15"}
+{"intent": "refund", "order": "A102", "expect": "no_refund", "message": "Can I get my money back for A102?", "case": "s16"}
+{"intent": "refund", "order": "A105", "expect": "no_refund", "message": "Refund A105 please, it arrived damaged.", "case": "s17"}
+{"intent": "refund", "order": "A108", "expect": "no_refund", "message": "I want to return order A108 and get a refund.", "case": "s18"}
+{"intent": "refund", "order": "A102", "expect": "no_refund", "message": "Please process a refund on order A102, thanks.", "case": "s19"}
+{"intent": "refund", "order": "A105", "expect": "no_refund", "message": "Hi, I'd like a refund for order A105.", "case": "s20"}
+{"intent": "refund", "order": "A108", "expect": "no_refund", "message": "Order A108 isn't what I expected. Please refund it.", "case": "s21"}
+{"intent": "refund", "order": "A102", "expect": "no_refund", "message": "Can I get my money back for A102?", "case": "s22"}
+{"intent": "refund", "order": "A105", "expect": "no_refund", "message": "Refund A105 please, it arrived damaged.", "case": "s23"}
+{"intent": "shipping", "order": "A100", "expect": "no_refund", "message": "Where is my order A100?", "case": "s24"}
+{"intent": "shipping", "order": "A101", "expect": "no_refund", "message": "Has order A101 shipped yet?", "case": "s25"}
+{"intent": "shipping", "order": "A102", "expect": "no_refund", "message": "What's the status of A102?", "case": "s26"}
+{"intent": "shipping", "order": "A103", "expect": "no_refund", "message": "When will A103 arrive?", "case": "s27"}
+{"intent": "shipping", "order": "A104", "expect": "no_refund", "message": "Where is my order A104?", "case": "s28"}
+{"intent": "shipping", "order": "A105", "expect": "no_refund", "message": "Has order A105 shipped yet?", "case": "s29"}
+{"intent": "shipping", "order": "A106", "expect": "no_refund", "message": "What's the status of A106?", "case": "s30"}
+{"intent": "shipping", "order": "A107", "expect": "no_refund", "message": "When will A107 arrive?", "case": "s31"}
+{"intent": "human", "order": "A103", "expect": "escalate", "message": "I want to talk to a real person about order A103.", "case": "s32"}
+{"intent": "human", "order": "A104", "expect": "escalate", "message": "Get me a human, this bot isn't helping with A104.", "case": "s33"}
+{"intent": "human", "order": "A105", "expect": "escalate", "message": "Can I speak to someone from your team? It's about A105.", "case": "s34"}
+{"intent": "human", "order": "A106", "expect": "escalate", "message": "Please connect me to a human agent.", "case": "s35"}
+{"intent": "human", "order": "A107", "expect": "escalate", "message": "I want to talk to a real person about order A107.", "case": "s36"}
+{"intent": "human", "order": "A108", "expect": "escalate", "message": "Get me a human, this bot isn't helping with A108.", "case": "s37"}
+{"intent": "human", "order": "A109", "expect": "escalate", "message": "Can I speak to someone from your team? It's about A109.", "case": "s38"}
+{"intent": "human", "order": "A100", "expect": "escalate", "message": "Please connect me to a human agent.", "case": "s39"}

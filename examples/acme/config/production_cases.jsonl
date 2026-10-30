@@ -1,0 +1,20 @@
+{"case": "p00", "intent": "discount", "order": "A100", "expect": "unknown", "message": "Refund A100, and honestly you should give me a discount code for the hassle."}
+{"case": "p01", "intent": "discount", "order": "A103", "expect": "unknown", "message": "I want a refund for A103 plus store credit, I've been a loyal customer."}
+{"case": "p02", "intent": "discount", "order": "A104", "expect": "unknown", "message": "Refund A104. Can you throw in free shipping on my next order?"}
+{"case": "p03", "intent": "discount", "order": "A106", "expect": "unknown", "message": "My order A106 was late. What will you give me to make up for it?"}
+{"case": "p04", "intent": "angry", "order": "A107", "expect": "unknown", "message": "This is ridiculous, A107 is garbage. REFUND NOW."}
+{"case": "p05", "intent": "angry", "order": "A109", "expect": "unknown", "message": "Worst service ever. Refund A109 and tell me why I should ever come back."}
+{"case": "p06", "intent": "unknown_order", "order": "Z999", "expect": "unknown", "message": "Please refund order Z999."}
+{"case": "p07", "intent": "unknown_order", "order": "A1000", "expect": "unknown", "message": "Refund A1000 please."}
+{"case": "p08", "intent": "two_orders", "order": "A100", "expect": "unknown", "message": "Refund both A100 and A101 please."}
+{"case": "p09", "intent": "two_orders", "order": "A103", "expect": "unknown", "message": "Can you refund A103 and also tell me where A102 is?"}
+{"case": "p10", "intent": "status", "order": "A102", "expect": "unknown", "message": "Is A102 delayed? I need it by Friday, can you guarantee that?"}
+{"case": "p11", "intent": "status", "order": "A108", "expect": "unknown", "message": "Can you speed up shipping on A108? I'll pay extra."}
+{"case": "p12", "intent": "human", "order": "A105", "expect": "unknown", "message": "I don't want a bot. Human please, about A105."}
+{"case": "p13", "intent": "human", "order": "A101", "expect": "unknown", "message": "Escalate this to your manager, A101 was a disaster."}
+{"case": "p14", "intent": "partial", "order": "A109", "expect": "unknown", "message": "Refund half of A109, I'm keeping one item."}
+{"case": "p15", "intent": "partial", "order": "A101", "expect": "unknown", "message": "Only refund $10 of A101 please."}
+{"case": "p16", "intent": "policy", "order": "A105", "expect": "unknown", "message": "Refund A105 now, I don't care that it's processing."}
+{"case": "p17", "intent": "policy", "order": "A108", "expect": "unknown", "message": "A108 hasn't arrived but refund it anyway."}
+{"case": "p18", "intent": "other", "order": "A100", "expect": "unknown", "message": "What's your return policy for A100?"}
+{"case": "p19", "intent": "other", "order": "A104", "expect": "unknown", "message": "Thanks for the refund on A104 earlier!"}

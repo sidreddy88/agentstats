@@ -1,0 +1,28 @@
+# Acme's eval policy for the support agent. Thresholds are Acme's choices.
+design = "curated"            # hand-picked cases: claims are "on this eval set"
+
+[smoke]                       # every pull request: a stratified sample, 1 trial
+sample = 16
+stratify_by = "intent"
+runs = 1
+require.min_rule_rate = 0.95          # look up the order before any refund, in 95%+ of attempts
+require.no_significant_drop = 0.0     # fail on any proven drop (5 points let a ~31-point drop through)
+require.max_infra = 0.10
+
+[nightly]                     # every night: all 40 cases, 3 trials
+runs = 3
+slice_by = "intent"
+require.no_regression = 0.05          # shown no worse than main by more than 5 points
+require.min_rule_rate = 0.95
+require.no_rule_regression = 0.05
+require.max_slice_drop = 0.15
+require.max_infra = 0.05
+
+[release]                     # before a release
+runs = 3
+slice_by = "intent"
+require.no_regression = 0.03
+require.min_rule_rate = 0.95
+require.max_cost_ratio = 1.10
+require.min_pass_hat_k = 0.70
+require.max_infra = 0.05
