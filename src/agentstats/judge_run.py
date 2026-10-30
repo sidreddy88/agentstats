@@ -43,6 +43,18 @@ SYSTEM = ("You grade an AI agent's work. Answer each question about the material
 Chat = Callable[[list[dict]], str]
 
 
+NEGATED = ("no_", "not_", "non_", "never_", "without_")
+
+
+def rubric_warnings(rubric: list[dict]) -> list[str]:
+    """Question names that read as the opposite of their question. A judge sometimes answers the name instead of the
+    question: "no_extra_promises" with question "Did it promise anything extra?" and pass "no" is a double negative,
+    and in a real run the judge flipped between yes and no on the same reply. Name questions after what they ask."""
+    return [f"question {q['name']!r} has a negated name and pass 'no': a judge may answer the name instead of the "
+            f"question. Rename it to what the question asks (e.g. {q['name'].split('_', 1)[-1]!r})"
+            for q in rubric if q.get("pass", "yes") == "no" and q["name"].lower().startswith(NEGATED)]
+
+
 def load_rubric(path: str | Path) -> list[dict]:
     rubric = json.loads(Path(path).read_text())
     if not isinstance(rubric, list) or not rubric:

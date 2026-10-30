@@ -79,6 +79,8 @@ def _promote(args) -> int:
 def _grade(args, chat=None) -> int:
     from agentstats import judge_run
     rubric, items = judge_run.load_rubric(args.rubric), judge_run.load_items(args.items)
+    for w in judge_run.rubric_warnings(rubric):
+        print("WARNING: " + w)
     if chat is None:
         key = os.environ.get(args.api_key_env)
         if not key:

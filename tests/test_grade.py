@@ -48,6 +48,14 @@ def test_rubric_and_items_are_validated(tmp_path):
         judge_run.load_items(items)
 
 
+def test_negated_question_names_with_pass_no_are_flagged():
+    rubric = [{"name": "no_extra_promises", "question": "Did it promise anything extra?", "pass": "no"},
+              {"name": "extra_promises", "question": "Did it promise anything extra?", "pass": "no"},
+              {"name": "not_rude", "question": "Was it polite?", "pass": "yes"}]
+    warnings = judge_run.rubric_warnings(rubric)
+    assert len(warnings) == 1 and "'no_extra_promises'" in warnings[0] and "'extra_promises'" in warnings[0]
+
+
 def test_prompt_shows_material_but_not_ids_or_tags():
     msgs = judge_run.prompt(ITEMS[0], RUBRIC)
     user = msgs[-1]["content"]
