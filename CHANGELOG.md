@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Statistics**
+- Few failures: when either outcome is rare (under 10 failures, or passes, across both arms) the fixed-cases test
+  falls back to Newcombe's hybrid score interval on the pooled counts. Before, no failures at all gave a zero-width
+  interval (+0.0 to +0.0), so `switch` could say SWITCH on 120 vs 120 passes and rule comparisons looked exact. In
+  simulation (40 cases x 3 trials, base 0.99 vs candidate 0.95) coverage of the true difference rose from about 92%
+  to 97%. Found by the Acme example's model switch, which now says NOT YET.
+
 **Example**
 - `examples/acme/`: "a week at Acme", two real agents (a tool-calling support agent with OpenTelemetry traces, an
   Inspect AI coding agent) through the whole back half: smoke and nightly gates, behaviour rules on production traces,

@@ -336,6 +336,9 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
 ## Methods and sources
 
 - Error bars for evals, clustered standard errors: Miller 2024, [arXiv 2411.00640](https://arxiv.org/abs/2411.00640).
+- Few failures (fewer than 10 of either outcome across both arms): Newcombe's hybrid score interval for a difference
+  of proportions (method 10), Newcombe 1998, [Statistics in Medicine 17:873-890](https://doi.org/10.1002/(SICI)1097-0258(19980430)17:8%3C873::AID-SIM779%3E3.0.CO;2-I),
+  instead of a normal approximation that collapses to zero width when nothing fails.
 - Choosing the method by how the eval set was built, evals in CI tiers, judge alignment and consistency metrics:
   Yesha Shah's "Agentic Evals" series (see [Credits](#credits)).
 - pass@k: Chen et al. 2021, [arXiv 2107.03374](https://arxiv.org/abs/2107.03374). pass^k: τ-bench, Yao et al.,

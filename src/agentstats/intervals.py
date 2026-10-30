@@ -79,6 +79,20 @@ def wilson(successes: int, n: int, conf: float = 0.95) -> Interval:
                     se=math.sqrt(p * (1 - p) / n))
 
 
+def newcombe(a_succ: int, a_n: int, b_succ: int, b_n: int, conf: float = 0.95) -> Interval:
+    """Difference of two proportions (b - a), Newcombe's hybrid score interval (method 10: two Wilson intervals
+    combined, MOVER). Unpaired. Behaves well with zero or very few events and is never zero width, unlike the normal
+    approximation. Newcombe 1998, Statistics in Medicine 17:873-890."""
+    pa, pb = a_succ / a_n, b_succ / b_n
+    wa, wb = wilson(a_succ, a_n, conf), wilson(b_succ, b_n, conf)
+    d = pb - pa
+    low = d - math.sqrt((pb - wb.low) ** 2 + (wa.high - pa) ** 2)
+    high = d + math.sqrt((wb.high - pb) ** 2 + (pa - wa.low) ** 2)
+    z = float(stats.norm.ppf(0.5 + conf / 2))
+    se = (high - low) / (2 * z)
+    return Interval(d, low, high, "newcombe", a_n + b_n, se=se, z=d / se if se else 0.0)
+
+
 def clustered(values: Sequence[float], clusters: Sequence[str], conf: float = 0.95) -> Interval:
     """Mean with a cluster-robust standard error: observations in the same cluster may be correlated."""
     n = len(values)

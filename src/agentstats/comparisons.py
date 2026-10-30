@@ -15,7 +15,9 @@ Is B different from A? Each test returns an Interval for the difference B - A (p
     test from agent-platform (app/evals/gate_v2.py) plus that correction. Cases that pass (or fail) every trial on
     both sides contribute nothing; the cases that sometimes pass carry the signal. With one trial per arm it
     reduces to McNemar's test (normal form). Valid when trials are independent across cases: a run-wide shock (a
-    provider's bad hour) breaks that, which analysis.py checks for.
+    provider's bad hour) breaks that, which analysis.py checks for. With fewer than 10 of the rarer outcome (e.g.
+    no failures at all) the variance can't be estimated and would collapse to zero; the test then uses Newcombe's
+    interval on the pooled counts instead (conservative, never zero width).
 
 Smallest detectable difference: about (t_{1-a/2} + z_{power}) x SE; with a = 0.05 and power 0.8, ~2.8 x SE.
 """
@@ -26,7 +28,9 @@ from collections.abc import Sequence
 
 from scipy import stats
 
-from agentstats.intervals import Interval, clustered, mean, sd, t_interval
+from agentstats.intervals import Interval, clustered, mean, newcombe, sd, t_interval
+
+MIN_EVENTS = 10   # below this many of the rarer outcome, the normal approximation isn't trusted
 
 
 def welch(a_runs: Sequence[float], b_runs: Sequence[float], conf: float = 0.95) -> Interval:
@@ -59,10 +63,25 @@ def paired_clustered(diffs: Sequence[float], clusters: Sequence[str], conf: floa
 
 
 def fixed_cases(a_counts: dict[str, tuple[int, int]], b_counts: dict[str, tuple[int, int]], conf: float = 0.95,
-                correction: bool = True) -> Interval:
-    """a_counts / b_counts: case -> (trials, passes), on the same cases."""
+                correction: bool = True, min_events: int = MIN_EVENTS) -> Interval:
+    """a_counts / b_counts: case -> (trials, passes), on the same cases.
+
+    With fewer than `min_events` of the rarer outcome (failures, or passes) across both arms, the per-case variance
+    can't be estimated (with no failures at all it is exactly zero, and the interval would have zero width). Then
+    the interval is Newcombe's on the pooled counts: conservative here (attempts at different per-case rates vary
+    less than one binomial with the same mean, and pairing is ignored), never zero width."""
     cases = sorted(set(a_counts) & set(b_counts))
     n = len(cases)
+    a_n, a_s = sum(a_counts[c][0] for c in cases), sum(a_counts[c][1] for c in cases)
+    b_n, b_s = sum(b_counts[c][0] for c in cases), sum(b_counts[c][1] for c in cases)
+    rarer = min(a_s + b_s, (a_n - a_s) + (b_n - b_s))
+    if n and rarer < min_events:
+        iv = newcombe(a_s, a_n, b_s, b_n, conf)
+        iv.method, iv.n = "fixed_cases (few failures: newcombe)", n
+        iv.note = (f"only {rarer} {'failures' if a_s + b_s > (a_n - a_s) + (b_n - b_s) else 'passes'} across both "
+                   f"arms: too few to estimate per-case noise, so this is Newcombe's interval on pooled counts "
+                   "(conservative). More trials, or harder cases, would narrow it")
+        return iv
     t = v = 0.0
     for c in cases:
         ka, sa = a_counts[c]

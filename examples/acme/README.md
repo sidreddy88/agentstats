@@ -69,12 +69,16 @@ set. `agentstats promote find` proposes them, tagged `source:production`; once a
 and reports the eval set's provenance (40 curated, 2 from production; every label from a person).
 *The approval is simulated* by `scripts/approve_all.py`.
 
-**5. New model: SWITCH to Claude Haiku 5.5**, at 0.46x the cost per attempt (CI 0.45x to 0.46x), no worse on any
-intent. **Read this one with care:** both models passed all 120 attempts, so the interval for the difference is
-+0.0 to +0.0, which overstates the certainty. 120 passes don't prove a zero failure rate, so "shown no more than 3
-points worse" is stronger than this data supports. The eval set is too easy to tell these two models apart (the coding
-agent's 36/36 has the same problem); the promoted two-order cases and harder refunds are the fix. (agentstats doesn't
-yet widen the interval when neither arm fails; that's a known limitation.)
+**5. New model: NOT YET for Claude Haiku 5.5**, even though it costs 0.46x per attempt (CI 0.45x to 0.46x) and passed
+all 120 attempts, like the current model. With no failures on either side, 120 attempts can't rule out a 3-point
+loss: the interval for the difference is -3.1 to +3.1 points (Newcombe's interval on the pooled counts), so the rule
+"shown no more than 3 points worse" isn't met yet, and agentstats estimates about 4 runs per arm would settle it.
+The eval set is too easy to tell these two models apart (the coding agent's 36/36 has the same problem); the
+promoted two-order cases and harder refunds are the better fix.
+Lesson from building this: the first version of this example said **SWITCH**, with an interval of exactly +0.0 to
++0.0. With no failures the per-case noise estimate was zero, and the interval collapsed. agentstats now falls back to
+Newcombe's interval when either outcome is rare (under 10 across both arms); in simulation with a real 4-point gap
+and rare failures, the old interval covered the truth only about 92% of the time, the new one about 97%.
 
 ## Files
 

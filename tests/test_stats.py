@@ -158,3 +158,61 @@ def test_small_sample_correction_brings_false_alarms_to_nominal():
     corrected, raw = _false_alarm(True), _false_alarm(False)
     assert 0.03 <= corrected <= 0.07
     assert raw > corrected
+
+
+# ---- few failures: the normal approximation breaks; Newcombe's interval takes over ----------------------------
+
+def test_no_failures_on_either_side_is_not_a_zero_width_interval():
+    from agentstats.comparisons import fixed_cases
+    allpass = {f"c{i}": (3, 3) for i in range(40)}
+    iv = fixed_cases(allpass, allpass)
+    assert iv.low < 0 < iv.high and iv.high - iv.low > 0.05                 # 120 vs 120 passes: about +-3.1 points
+    assert iv.low == pytest.approx(-0.0310, abs=0.001) and "newcombe" in iv.method and "0 failures" in iv.note
+
+
+def test_newcombe_matches_published_values():
+    # Newcombe 1998, Table II example (56/70 vs 48/80): difference 0.2, method 10 interval 0.0524 to 0.3339
+    from agentstats.intervals import newcombe
+    iv = newcombe(48, 80, 56, 70)
+    assert iv.estimate == pytest.approx(0.2) and iv.low == pytest.approx(0.0524, abs=5e-4)
+    assert iv.high == pytest.approx(0.3339, abs=5e-4)
+
+
+def test_enough_failures_keeps_the_paired_fixed_cases_test():
+    from agentstats.comparisons import fixed_cases
+    a = {f"c{i}": (3, 3 if i % 3 else 1) for i in range(40)}               # 28 failures: plenty
+    assert fixed_cases(a, a).method == "fixed_cases"
+
+
+def test_coverage_when_failures_are_rare():
+    """True per-case pass rate 0.99 on both sides, 40 cases x 3 trials: most runs see 0-3 failures. The interval must
+    still cover the true difference (0) at about the nominal rate; the old zero-width interval didn't."""
+    import random
+
+    from agentstats.comparisons import fixed_cases
+    rng = random.Random(0)
+    covered = trials = 0
+    for _ in range(2000):
+        def arm():
+            return {f"c{i}": (3, sum(rng.random() < 0.99 for _ in range(3))) for i in range(40)}
+        iv = fixed_cases(arm(), arm())
+        trials += 1
+        covered += iv.low <= 0 <= iv.high
+    assert covered / trials >= 0.95
+
+
+def test_rare_failures_with_a_real_gap_keep_nominal_coverage():
+    """Base 0.99 vs candidate 0.95 per case (a real 4-point gap), 40 cases x 3 trials: failures are rare, and the old
+    normal-approximation interval covered the truth only ~92% of the time (overconfident exactly where a model switch
+    is decided). The few-failures fallback must hold the nominal 95%."""
+    import random
+
+    from agentstats.comparisons import fixed_cases
+    rng = random.Random(1)
+    covered = 0
+    for _ in range(2000):
+        a = {f"c{i}": (3, sum(rng.random() < 0.99 for _ in range(3))) for i in range(40)}
+        b = {f"c{i}": (3, sum(rng.random() < 0.95 for _ in range(3))) for i in range(40)}
+        iv = fixed_cases(a, b)
+        covered += iv.low <= -0.04 <= iv.high
+    assert covered / 2000 >= 0.95
