@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentstats"
-version = "0.3.0"
+version = "0.4.0"
 description = "Statistics for agent evals: from trajectories to claims you can defend (CIs chosen by how your eval set was built, pass^k, infra failures kept apart, CI gates, behaviour rules, judge checks, pre-registered model-switch decisions)."
 readme = "README.md"
 license = "MIT"
@@ -36,3 +36,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["examples/acme"]   # recorded runs: on GitHub, not in the package

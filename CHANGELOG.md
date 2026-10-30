@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-10-30)
 
 **Statistics**
 - The sampled design no longer crashes on rules-only rows (no verdicts at all); it reports the rule checks like the
