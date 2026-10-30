@@ -60,9 +60,16 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--rules", required=True, help="rules JSON (see agentstats.checks)")
     k.add_argument("--out", required=True, help="output JSONL with checks filled in")
 
-    v = sub.add_parser("convert", help="Harbor job dir(s) to agentstats JSONL")
-    v.add_argument("jobs", nargs="+")
-    v.add_argument("--arm")
+    v = sub.add_parser("convert", help="Harbor job dir(s) or Inspect AI logs to agentstats JSONL")
+    v.add_argument("jobs", nargs="+",
+                   help="Harbor job directories, or Inspect logs (.eval / .json) with --format inspect")
+    v.add_argument("--format", choices=["harbor", "inspect"], default="harbor")
+    v.add_argument("--scorer", help="Inspect: which scorer gives pass/fail (default: the log's headline scorer)")
+    v.add_argument("--pass-threshold", type=float, default=1.0, help="Inspect: numeric scores pass at or above this")
+    v.add_argument("--errors", choices=["infra", "fail"], default="infra",
+                   help="Inspect: a sample that errored is an infrastructure failure (default) or a failed attempt")
+    v.add_argument("--rules", help="Inspect: rules JSON; fills each row's checks from the sample's tool calls")
+    v.add_argument("--arm", help="arm name (Inspect default: the log's model)")
     v.add_argument("--out", required=True)
 
     tr = sub.add_parser("convert-traces", help="OpenTelemetry (OTLP JSON) or Langfuse traces to agentstats JSONL")
@@ -181,6 +188,14 @@ def main(argv: list[str] | None = None) -> int:
         graded = sum(1 for a in atts if a.passed is not None)
         print(f"wrote {args.out}: {len(atts)} traces, {graded} with a verdict"
               + ("" if graded else " (rules-only)"))
+    elif args.cmd == "convert" and args.format == "inspect":
+        from agentstats import inspect_logs
+        rules = checks.load_rules(args.rules) if args.rules else None
+        atts = [a for p in args.jobs
+                for a in inspect_logs.load(p, scorer=args.scorer, pass_threshold=args.pass_threshold,
+                                           errors=args.errors, rules=rules, arm=args.arm)]
+        records.write_jsonl(atts, args.out)
+        print(f"wrote {args.out}: {len(atts)} attempts")
     elif args.cmd == "convert":
         records.write_jsonl(_load_many(args.jobs, args.arm), args.out)
         print(f"wrote {args.out}")

@@ -118,10 +118,13 @@ def write_jsonl(attempts: list[Attempt], path: str | Path) -> None:
 
 
 def load(path: str | Path, *, arm: str | None = None, run: int | None = None) -> list[Attempt]:
-    """A JSONL file, a Harbor job directory, or a directory of Harbor jobs (one per run)."""
-    from agentstats import adapters
+    """A JSONL file, an Inspect AI log (.eval, or .json), a Harbor job directory, or a directory of Harbor jobs
+    (one per run)."""
+    from agentstats import adapters, inspect_logs
 
     path = Path(path)
+    if path.is_file() and inspect_logs.is_inspect_log(path):
+        return inspect_logs.load(path, arm=arm)
     if path.is_file():
         return load_jsonl(path, arm=arm)
     if adapters.is_harbor_job(path):

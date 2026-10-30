@@ -1,0 +1,733 @@
+{
+ "version": 2,
+ "status": "success",
+ "eval": {
+  "eval_id": "5iwzPhyMRZVMwWVgSZxgHj",
+  "run_id": "kVkYhm4X5msPnZXK5x75Mv",
+  "created": "2026-10-30T18:24:56+00:00",
+  "task": "task",
+  "task_id": "56ivTrcs8RkPDEw8SbMJ6w",
+  "task_version": 0,
+  "task_display_name": "task",
+  "task_attribs": {},
+  "task_args": {},
+  "task_args_passed": {},
+  "solver_args_passed": {},
+  "dataset": {
+   "samples": 4,
+   "sample_ids": [
+    "t0",
+    "t1",
+    "t2",
+    "t3"
+   ],
+   "shuffled": false
+  },
+  "model": "mockllm/model",
+  "model_generate_config": {},
+  "model_args": {
+   "custom_outputs": [
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "Vv4cthtE2nYzyXQr7sR3do",
+        "content": "tool call for tool lookup_order",
+        "source": "generate",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "id": "for_tool_call_f7fa68a1-e582-4fa1-8215-87656b3c06a7",
+          "function": "lookup_order",
+          "arguments": {
+           "order_id": "A0"
+          },
+          "type": "function"
+         }
+        ],
+        "model": "mockllm/model"
+       },
+       "stop_reason": "tool_calls"
+      }
+     ],
+     "completion": "tool call for tool lookup_order",
+     "usage": {
+      "input_tokens": 79,
+      "output_tokens": 31,
+      "total_tokens": 110
+     },
+     "input_context_tokens": 79,
+     "time": 0.2439567083492875
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "3uiDrBt7yvsvmDT4afFADu",
+        "content": "refund issued",
+        "source": "generate",
+        "role": "assistant",
+        "model": "mockllm/model"
+       },
+       "stop_reason": "stop"
+      }
+     ],
+     "completion": "refund issued",
+     "usage": {
+      "input_tokens": 105,
+      "output_tokens": 13,
+      "total_tokens": 118
+     },
+     "input_context_tokens": 105,
+     "time": 0.000256167259067297
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "2DdmotzVkZfJCBqaxyPhmT",
+        "content": "tool call for tool lookup_order",
+        "source": "generate",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "id": "for_tool_call_e70ea041-ed40-45e8-a936-4be0b7f75db9",
+          "function": "lookup_order",
+          "arguments": {
+           "order_id": "A1"
+          },
+          "type": "function"
+         }
+        ],
+        "model": "mockllm/model"
+       },
+       "stop_reason": "tool_calls"
+      }
+     ],
+     "completion": "tool call for tool lookup_order",
+     "usage": {
+      "input_tokens": 79,
+      "output_tokens": 31,
+      "total_tokens": 110
+     },
+     "input_context_tokens": 79,
+     "time": 0.00013675028458237648
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "HoADG3AJ8c8o4VUhg6XU66",
+        "content": "sorry",
+        "source": "generate",
+        "role": "assistant",
+        "model": "mockllm/model"
+       },
+       "stop_reason": "stop"
+      }
+     ],
+     "completion": "sorry",
+     "usage": {
+      "input_tokens": 105,
+      "output_tokens": 5,
+      "total_tokens": 110
+     },
+     "input_context_tokens": 105,
+     "time": 0.00012525031343102455
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "SdLmPXhXk7WfMedDX5fgu5",
+        "content": "tool call for tool lookup_order",
+        "source": "generate",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "id": "for_tool_call_c73defc7-bb18-461d-9a77-128f9eaa3648",
+          "function": "lookup_order",
+          "arguments": {
+           "order_id": "A2"
+          },
+          "type": "function"
+         }
+        ],
+        "model": "mockllm/model"
+       },
+       "stop_reason": "tool_calls"
+      }
+     ],
+     "completion": "tool call for tool lookup_order",
+     "usage": {
+      "input_tokens": 79,
+      "output_tokens": 31,
+      "total_tokens": 110
+     },
+     "input_context_tokens": 79,
+     "time": 0.00012558326125144958
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "DGvqE5Kdc7H9t7vdDapQMb",
+        "content": "refund issued",
+        "source": "generate",
+        "role": "assistant",
+        "model": "mockllm/model"
+       },
+       "stop_reason": "stop"
+      }
+     ],
+     "completion": "refund issued",
+     "usage": {
+      "input_tokens": 105,
+      "output_tokens": 13,
+      "total_tokens": 118
+     },
+     "input_context_tokens": 105,
+     "time": 0.00011720787733793259
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "nHXSeZxALz9KsbpbYRcWo2",
+        "content": "tool call for tool lookup_order",
+        "source": "generate",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "id": "for_tool_call_03533cfa-15e8-4cbb-a532-2741cd1e7e54",
+          "function": "lookup_order",
+          "arguments": {
+           "order_id": "boom"
+          },
+          "type": "function"
+         }
+        ],
+        "model": "mockllm/model"
+       },
+       "stop_reason": "tool_calls"
+      }
+     ],
+     "completion": "tool call for tool lookup_order",
+     "usage": {
+      "input_tokens": 79,
+      "output_tokens": 31,
+      "total_tokens": 110
+     },
+     "input_context_tokens": 79,
+     "time": 0.00015679094940423965
+    },
+    {
+     "model": "mockllm/model",
+     "choices": [
+      {
+       "message": {
+        "id": "G5gdft7QP9aPiJ7R9LBrd8",
+        "content": "sorry",
+        "source": "generate",
+        "role": "assistant",
+        "model": "mockllm/model"
+       },
+       "stop_reason": "stop"
+      }
+     ],
+     "completion": "sorry"
+    }
+   ]
+  },
+  "config": {
+   "epochs": 1,
+   "fail_on_error": false,
+   "continue_on_fail": false,
+   "score_on_error": false,
+   "max_samples": 1,
+   "sandbox_cleanup": true,
+   "sandbox_prebuilt": false,
+   "log_samples": true,
+   "log_realtime": true,
+   "log_images": true,
+   "score_display": true
+  },
+  "packages": {
+   "inspect_ai": "0.3.286"
+  },
+  "scorers": [
+   {
+    "name": "includes",
+    "options": {},
+    "metrics": [
+     {
+      "name": "inspect_ai/accuracy",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/stderr",
+      "options": {}
+     }
+    ],
+    "metadata": {}
+   }
+  ]
+ },
+ "plan": {
+  "name": "plan",
+  "steps": [
+   {
+    "solver": "use_tools",
+    "params": {
+     "tools": [
+      {
+       "type": "tool",
+       "name": "lookup_order",
+       "params": {}
+      }
+     ],
+     "tool_choice": "auto",
+     "append": false
+    },
+    "params_passed": {
+     "tools": [
+      {
+       "type": "tool",
+       "name": "lookup_order",
+       "params": {}
+      }
+     ]
+    }
+   },
+   {
+    "solver": "generate",
+    "params": {
+     "tool_calls": "loop"
+    },
+    "params_passed": {}
+   }
+  ],
+  "config": {}
+ },
+ "results": {
+  "total_samples": 4,
+  "completed_samples": 3,
+  "scores": [
+   {
+    "name": "includes",
+    "scorer": "includes",
+    "scored_samples": 3,
+    "unscored_samples": 0,
+    "params": {},
+    "metrics": {
+     "accuracy": {
+      "name": "accuracy",
+      "value": 0.6666666666666666,
+      "params": {}
+     },
+     "stderr": {
+      "name": "stderr",
+      "value": 0.33333333333333337,
+      "params": {}
+     }
+    }
+   }
+  ],
+  "headline": {
+   "scorer": "includes",
+   "score": "includes",
+   "metric": "accuracy"
+  }
+ },
+ "stats": {
+  "started_at": "2026-10-30T18:24:56+00:00",
+  "completed_at": "2026-10-30T18:24:57+00:00",
+  "model_usage": {
+   "mockllm/model": {
+    "input_tokens": 631,
+    "output_tokens": 155,
+    "total_tokens": 786
+   }
+  },
+  "role_usage": {},
+  "connection_limit_history": []
+ },
+ "invalidated": false,
+ "tags": [],
+ "metadata": {},
+ "samples": [
+  {
+   "id": "t0",
+   "epoch": 1,
+   "input": "q0",
+   "target": "refund issued",
+   "messages": [
+    {
+     "id": "fBsBtVmfLdWdpG8HVEqQ8U",
+     "content": "q0",
+     "source": "input",
+     "role": "user"
+    },
+    {
+     "id": "Vv4cthtE2nYzyXQr7sR3do",
+     "content": "tool call for tool lookup_order",
+     "source": "generate",
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "id": "for_tool_call_f7fa68a1-e582-4fa1-8215-87656b3c06a7",
+       "function": "lookup_order",
+       "arguments": {
+        "order_id": "A0"
+       },
+       "type": "function"
+      }
+     ],
+     "model": "mockllm/model"
+    },
+    {
+     "id": "EnLjHNKZwUeQNSeCd2LkL4",
+     "content": "order A0: shipped",
+     "role": "tool",
+     "tool_call_id": "for_tool_call_f7fa68a1-e582-4fa1-8215-87656b3c06a7",
+     "function": "lookup_order"
+    },
+    {
+     "id": "3uiDrBt7yvsvmDT4afFADu",
+     "content": "refund issued",
+     "source": "generate",
+     "role": "assistant",
+     "model": "mockllm/model"
+    }
+   ],
+   "output": {
+    "model": "mockllm/model",
+    "choices": [
+     {
+      "message": {
+       "id": "3uiDrBt7yvsvmDT4afFADu",
+       "content": "refund issued",
+       "source": "generate",
+       "role": "assistant",
+       "model": "mockllm/model"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "refund issued",
+    "usage": {
+     "input_tokens": 105,
+     "output_tokens": 13,
+     "total_tokens": 118
+    },
+    "input_context_tokens": 105,
+    "time": 0.000256167259067297
+   },
+   "scores": {
+    "includes": {
+     "value": "C",
+     "answer": "refund issued",
+     "explanation": "refund issued",
+     "history": []
+    }
+   },
+   "metadata": {
+    "intent": "refund"
+   },
+   "model_usage": {
+    "mockllm/model": {
+     "input_tokens": 184,
+     "output_tokens": 44,
+     "total_tokens": 228
+    }
+   },
+   "started_at": "2026-10-30T18:24:56.827137+00:00",
+   "completed_at": "2026-10-30T18:24:57.561758+00:00",
+   "total_time": 0.735,
+   "working_time": 0.734,
+   "uuid": "aifWve5YpmjPGsDWNJXkY8",
+   "error_retries": [],
+   "turn_count": 2
+  },
+  {
+   "id": "t1",
+   "epoch": 1,
+   "input": "q1",
+   "target": "refund issued",
+   "messages": [
+    {
+     "id": "EVEJmhQum5gPYG9AnSCgwq",
+     "content": "q1",
+     "source": "input",
+     "role": "user"
+    },
+    {
+     "id": "2DdmotzVkZfJCBqaxyPhmT",
+     "content": "tool call for tool lookup_order",
+     "source": "generate",
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "id": "for_tool_call_e70ea041-ed40-45e8-a936-4be0b7f75db9",
+       "function": "lookup_order",
+       "arguments": {
+        "order_id": "A1"
+       },
+       "type": "function"
+      }
+     ],
+     "model": "mockllm/model"
+    },
+    {
+     "id": "2CDETse9KVprBTNZPhoTeF",
+     "content": "order A1: shipped",
+     "role": "tool",
+     "tool_call_id": "for_tool_call_e70ea041-ed40-45e8-a936-4be0b7f75db9",
+     "function": "lookup_order"
+    },
+    {
+     "id": "HoADG3AJ8c8o4VUhg6XU66",
+     "content": "sorry",
+     "source": "generate",
+     "role": "assistant",
+     "model": "mockllm/model"
+    }
+   ],
+   "output": {
+    "model": "mockllm/model",
+    "choices": [
+     {
+      "message": {
+       "id": "HoADG3AJ8c8o4VUhg6XU66",
+       "content": "sorry",
+       "source": "generate",
+       "role": "assistant",
+       "model": "mockllm/model"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "sorry",
+    "usage": {
+     "input_tokens": 105,
+     "output_tokens": 5,
+     "total_tokens": 110
+    },
+    "input_context_tokens": 105,
+    "time": 0.00012525031343102455
+   },
+   "scores": {
+    "includes": {
+     "value": "I",
+     "answer": "sorry",
+     "explanation": "sorry",
+     "history": []
+    }
+   },
+   "metadata": {
+    "intent": "refund"
+   },
+   "model_usage": {
+    "mockllm/model": {
+     "input_tokens": 184,
+     "output_tokens": 36,
+     "total_tokens": 220
+    }
+   },
+   "started_at": "2026-10-30T18:24:57.569046+00:00",
+   "completed_at": "2026-10-30T18:24:57.576376+00:00",
+   "total_time": 0.007,
+   "working_time": 0.007,
+   "uuid": "aN3uTwhK4nS4Ahz7PAnVs3",
+   "error_retries": [],
+   "turn_count": 2
+  },
+  {
+   "id": "t2",
+   "epoch": 1,
+   "input": "q2",
+   "target": "refund issued",
+   "messages": [
+    {
+     "id": "4PJxQTzfvqfkJcjZnywn34",
+     "content": "q2",
+     "source": "input",
+     "role": "user"
+    },
+    {
+     "id": "SdLmPXhXk7WfMedDX5fgu5",
+     "content": "tool call for tool lookup_order",
+     "source": "generate",
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "id": "for_tool_call_c73defc7-bb18-461d-9a77-128f9eaa3648",
+       "function": "lookup_order",
+       "arguments": {
+        "order_id": "A2"
+       },
+       "type": "function"
+      }
+     ],
+     "model": "mockllm/model"
+    },
+    {
+     "id": "kRcD3yn2oGv3iVPcpQJBqw",
+     "content": "order A2: shipped",
+     "role": "tool",
+     "tool_call_id": "for_tool_call_c73defc7-bb18-461d-9a77-128f9eaa3648",
+     "function": "lookup_order"
+    },
+    {
+     "id": "DGvqE5Kdc7H9t7vdDapQMb",
+     "content": "refund issued",
+     "source": "generate",
+     "role": "assistant",
+     "model": "mockllm/model"
+    }
+   ],
+   "output": {
+    "model": "mockllm/model",
+    "choices": [
+     {
+      "message": {
+       "id": "DGvqE5Kdc7H9t7vdDapQMb",
+       "content": "refund issued",
+       "source": "generate",
+       "role": "assistant",
+       "model": "mockllm/model"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "refund issued",
+    "usage": {
+     "input_tokens": 105,
+     "output_tokens": 13,
+     "total_tokens": 118
+    },
+    "input_context_tokens": 105,
+    "time": 0.00011720787733793259
+   },
+   "scores": {
+    "includes": {
+     "value": "C",
+     "answer": "refund issued",
+     "explanation": "refund issued",
+     "history": []
+    }
+   },
+   "metadata": {
+    "intent": "refund"
+   },
+   "model_usage": {
+    "mockllm/model": {
+     "input_tokens": 184,
+     "output_tokens": 44,
+     "total_tokens": 228
+    }
+   },
+   "started_at": "2026-10-30T18:24:57.581639+00:00",
+   "completed_at": "2026-10-30T18:24:57.588512+00:00",
+   "total_time": 0.007,
+   "working_time": 0.007,
+   "uuid": "k9hgDfKcqKju9RYQzHLHYf",
+   "error_retries": [],
+   "turn_count": 2
+  },
+  {
+   "id": "t3",
+   "epoch": 1,
+   "input": "q3",
+   "target": "refund issued",
+   "messages": [
+    {
+     "id": "GhcRtBHHz4wrezSGnTYXmm",
+     "content": "q3",
+     "source": "input",
+     "role": "user"
+    },
+    {
+     "id": "nHXSeZxALz9KsbpbYRcWo2",
+     "content": "tool call for tool lookup_order",
+     "source": "generate",
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "id": "for_tool_call_03533cfa-15e8-4cbb-a532-2741cd1e7e54",
+       "function": "lookup_order",
+       "arguments": {
+        "order_id": "boom"
+       },
+       "type": "function"
+      }
+     ],
+     "model": "mockllm/model"
+    }
+   ],
+   "output": {
+    "model": "mockllm/model",
+    "choices": [
+     {
+      "message": {
+       "id": "nHXSeZxALz9KsbpbYRcWo2",
+       "content": "tool call for tool lookup_order",
+       "source": "generate",
+       "role": "assistant",
+       "tool_calls": [
+        {
+         "id": "for_tool_call_03533cfa-15e8-4cbb-a532-2741cd1e7e54",
+         "function": "lookup_order",
+         "arguments": {
+          "order_id": "boom"
+         },
+         "type": "function"
+        }
+       ],
+       "model": "mockllm/model"
+      },
+      "stop_reason": "tool_calls"
+     }
+    ],
+    "completion": "tool call for tool lookup_order",
+    "usage": {
+     "input_tokens": 79,
+     "output_tokens": 31,
+     "total_tokens": 110
+    },
+    "input_context_tokens": 79,
+    "time": 0.00015679094940423965
+   },
+   "scores": {},
+   "metadata": {
+    "intent": "refund"
+   },
+   "model_usage": {
+    "mockllm/model": {
+     "input_tokens": 79,
+     "output_tokens": 31,
+     "total_tokens": 110
+    }
+   },
+   "started_at": "2026-10-30T18:24:57.593305+00:00",
+   "completed_at": "2026-10-30T18:24:57.618355+00:00",
+   "total_time": 0.025,
+   "working_time": 0.025,
+   "uuid": "AKsH3KBzhqjvmsjPym7ssk",
+   "error": {
+    "message": "RuntimeError('upstream 503')",
+    "traceback": "Traceback (most recent call last):\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/run.py\", line 2989, in _task_run_sample_attempt\n    raise_unwrapped(ex, inner_exception(ex))\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/_async.py\", line 188, in raise_unwrapped\n    raise error\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/anyio/_core/_tasks.py\", line 327, in _run_coro\n    retval = await self._coro\n             ^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/run.py\", line 2848, in run\n    state = await plan(state, generate)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/solver/_plan.py\", line 109, in __call__\n    state = await solver(state, generate)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/solver/_solver.py\", line 295, in solve\n    return await generate(state, tool_calls=tool_calls, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/run.py\", line 1259, in generate\n    return await task_generate(\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/generate.py\", line 47, in task_generate\n    messages, output = await execute_tools(\n                       ^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 194, in execute_tools\n    return await _execute_tools_impl(messages, tools, max_output)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 732, in _execute_tools_impl\n    raise_unwrapped(\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/_async.py\", line 188, in raise_unwrapped\n    raise error\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 548, in run_one\n    raise call_exception\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 270, in call_tool_task\n    raise_unwrapped(ex, decisive_tool_exception(ex))\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/_async.py\", line 188, in raise_unwrapped\n    raise error\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 254, in call_tool_task\n    called = await call_tool(\n             ^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/_call_tools.py\", line 949, in call_tool\n    result: ToolResult = await tool_def.tool(**arguments)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/insp/task/demo2.py\", line 18, in execute\n    raise RuntimeError(\"upstream 503\")\nRuntimeError: upstream 503\n",
+    "traceback_ansi": "\u001b[31m\u250c\u2500\u001b[0m\u001b[31m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m\u001b[31m \u001b[0m\u001b[1;31mTraceback \u001b[0m\u001b[1;2;31m(most recent call last)\u001b[0m\u001b[31m \u001b[0m\u001b[31m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m\u001b[31m\u2500\u2510\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/\u001b[0m\u001b[1mr\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mun.py\u001b[0m:2989 in _task_run_sample_attempt                                      \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/\u001b[0m\u001b[1m_async\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1m.py\u001b[0m:188 in raise_unwrapped                                                  \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/anyio/_core/\u001b[0m\u001b[1m_tasks.py\u001b[0m:3 \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m 27 in _run_coro                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m324 \u001b[0m\u001b[2m\u2502   \u2502   \u001b[0m                                                              \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m325 \u001b[0m\u001b[2m\u2502   \u2502   \u001b[0mwith self._cancel_scope:                                      \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m326 \u001b[0m\u001b[2m\u2502   \u2502   \u2502   \u001b[0mtry:                                                      \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[31m> \u001b[0m327 \u001b[2m\u2502   \u2502   \u2502   \u2502   \u001b[0mretval = await self._coro                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m328 \u001b[0m\u001b[2m\u2502   \u2502   \u2502   \u001b[0mexcept BaseException as exc:                              \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m329 \u001b[0m\u001b[2m\u2502   \u2502   \u2502   \u2502   \u001b[0mself._exception = exc                                 \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m330 \u001b[0m\u001b[2m\u2502   \u2502   \u2502   \u2502   \u001b[0mraise                                                 \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/\u001b[0m\u001b[1mr\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mun.py\u001b[0m:2848 in run                                                           \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/solver/\u001b[0m\u001b[1m_plan\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1m.py\u001b[0m:109 in __call__                                                         \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/solver/\u001b[0m\u001b[1m_solv\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mer.py\u001b[0m:295 in solve                                                          \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/\u001b[0m\u001b[1mr\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mun.py\u001b[0m:1259 in generate                                                      \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_eval/task/\u001b[0m\u001b[1mg\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1menerate.py\u001b[0m:47 in task_generate                                              \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:194 in execute_tools                                               \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:732 in _execute_tools_impl                                         \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/\u001b[0m\u001b[1m_async\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1m.py\u001b[0m:188 in raise_unwrapped                                                  \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:548 in run_one                                                     \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:270 in call_tool_task                                              \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/_util/\u001b[0m\u001b[1m_async\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1m.py\u001b[0m:188 in raise_unwrapped                                                  \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:254 in call_tool_task                                              \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/venv/lib/python3.12/site-packages/inspect_ai/model/\u001b[0m\u001b[1m_call_\u001b[0m \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[1mtools.py\u001b[0m:949 in call_tool                                                   \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[2m/private/tmp/insp/task/\u001b[0m\u001b[1mdemo2.py\u001b[0m:18 in execute                               \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m                                                                             \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m15 \u001b[0m\u001b[2m\u2502   \u2502   \u2502   \u001b[0morder_id: the order id                                     \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m16 \u001b[0m\u001b[2m\u2502   \u2502   \u001b[0m\"\"\"                                                            \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m17 \u001b[0m\u001b[2m\u2502   \u2502   \u001b[0mif order_id == \"boom\":                                         \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m \u001b[31m> \u001b[0m18 \u001b[2m\u2502   \u2502   \u2502   \u001b[0m\u001b[1;4mraise RuntimeError(\"upstream 503\")\u001b[0m                         \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m19 \u001b[0m\u001b[2m\u2502   \u2502   \u001b[0mreturn f\"order {order_id}: shipped\"                            \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m20 \u001b[0m\u001b[2m\u2502   \u001b[0mreturn execute                                                     \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2502\u001b[0m   \u001b[2m21 \u001b[0m                                                                       \u001b[31m\u2502\u001b[0m\n\u001b[31m\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\u001b[0m\n\u001b[1;91mRuntimeError: \u001b[0mupstream \u001b[1;36m503\u001b[0m\n"
+   },
+   "error_retries": [],
+   "turn_count": 1
+  }
+ ]
+}
