@@ -76,6 +76,30 @@ def _promote(args) -> int:
     return 0
 
 
+def _grade(args, chat=None) -> int:
+    from agentstats import judge_run
+    rubric, items = judge_run.load_rubric(args.rubric), judge_run.load_items(args.items)
+    if chat is None:
+        key = os.environ.get(args.api_key_env)
+        if not key:
+            print(f"set {args.api_key_env} (or choose another variable with --api-key-env)")
+            return 2
+        chat = judge_run.http_chat(args.base_url, args.model, key,
+                                   temperature=None if args.temperature < 0 else args.temperature)
+    fields = [f.strip() for f in args.fields.split(",")] if args.fields else None
+    labels, rows, counts = judge_run.run(items, rubric, chat, repeats=args.repeats, workers=args.workers,
+                                         fields=fields)
+    Path(args.out).write_text("".join(json.dumps(r) + "\n" for r in labels))
+    if args.rows:
+        Path(args.rows).write_text("".join(json.dumps(r) + "\n" for r in rows))
+    print(f"{counts['calls']} judge calls: {counts['judged']} judged, {counts['unparsed']} unparsed replies, "
+          f"{counts['errors']} errors. Wrote {args.out}" + (f" and {args.rows}" if args.rows else "") + ".")
+    if args.repeats > 1:
+        print(f"Judge consistency: `agentstats judge {args.out}`; add human labels to the same file to check "
+              "agreement.")
+    return 0 if counts["judged"] else 3
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="agentstats", description="Statistics for agent evals.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -186,6 +210,19 @@ def main(argv: list[str] | None = None) -> int:
     pa = psub.add_parser("accept", help="append approved candidates to the eval set; print its provenance mix")
     pa.add_argument("candidates")
     pa.add_argument("--into", required=True, help="the eval set's cases file (created if missing)")
+    gr = sub.add_parser("grade", help="LLM judge on yes/no rubric questions (any OpenAI-compatible endpoint)")
+    gr.add_argument("items", help="JSONL: {item, input, output, ...}; case/run/arm/tags are carried into --rows")
+    gr.add_argument("--rubric", required=True, help='JSON list: [{"name", "question", "pass": "yes"|"no"}]')
+    gr.add_argument("--model", required=True)
+    gr.add_argument("--base-url", default="https://api.openai.com/v1", help="OpenAI-compatible API base URL")
+    gr.add_argument("--api-key-env", default="OPENAI_API_KEY", help="environment variable holding the API key")
+    gr.add_argument("--temperature", type=float, default=0.0, help="omit with a negative value for models that "
+                    "reject one")
+    gr.add_argument("--repeats", type=int, default=1, help="judge each item this many times (for consistency)")
+    gr.add_argument("--workers", type=int, default=4)
+    gr.add_argument("--fields", help="comma-separated item fields to show the judge (default: all but ids/tags)")
+    gr.add_argument("--out", required=True, help="judge label rows (JSONL) for `agentstats judge`")
+    gr.add_argument("--rows", help="also write attempt rows whose checks are the rubric answers")
     switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
@@ -194,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
         return _review(args)
     if args.cmd == "promote":
         return _promote(args)
+    if args.cmd == "grade":
+        return _grade(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))
