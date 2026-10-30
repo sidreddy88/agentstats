@@ -8,6 +8,12 @@
   sample errors are infrastructure failures by default; limits and N scores become `no_answer`; tool calls feed rule
   checks; metadata becomes tags. Uses inspect-ai's reader when installed (no new dependency).
 
+**Eval sets**
+- `agentstats promote find` / `promote accept`: failures (failed verdicts, or rule violations on rules-only production
+  rows) grouped by signature and deduplicated into candidate cases with provenance tags (source, found, label);
+  accepting appends approved candidates to the cases file and prints the provenance mix, warning when one model
+  labelled most of the eval set.
+
 **Judges**
 - `agentstats review sample` / `review import`: sampled human review of graded attempts. The sample favours attempts
   where the verdict and the behaviour rules disagree, then failures, then passes, spread over a tag (`--stratify-by`);

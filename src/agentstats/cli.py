@@ -54,6 +54,28 @@ def _review(args) -> int:
     return 0
 
 
+def _promote(args) -> int:
+    from agentstats import promote
+    if args.promote_cmd == "find":
+        existing = set(sample.load_cases(args.existing)) if args.existing else set()
+        cands, report = promote.find(_load_many(args.rows, None), source=args.source, label_from=args.label_from,
+                                     existing=existing, group_by=args.group_by, per_signature=args.per_signature,
+                                     found=args.found)
+        Path(args.out).write_text("".join(json.dumps(c) + "\n" for c in cands))
+        print(promote.render_report(report))
+        print(f"\nwrote {len(cands)} candidates to {args.out}. Set \"approved\": true on the ones to keep, then "
+              f"`agentstats promote accept {args.out} --into <cases.jsonl>`.")
+        return 0
+    added, prov = promote.accept(args.candidates, args.into)
+    print(f"added {added} cases to {args.into} ({prov['cases']} in total). Add their inputs and expected answers "
+          "to your runner's dataset.")
+    print("labels: " + ", ".join(f"{k} {v}" for k, v in sorted(prov["labels"].items())))
+    print("sources: " + ", ".join(f"{k} {v}" for k, v in sorted(prov["sources"].items())))
+    for w in prov["warnings"]:
+        print("WARNING: " + w)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="agentstats", description="Statistics for agent evals.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -149,12 +171,29 @@ def main(argv: list[str] | None = None) -> int:
     ri.add_argument("--rater", default="human", help="the reviewer's name (labels get rater human:<name>)")
     ri.add_argument("--out", required=True, help="label rows (JSONL) for `agentstats judge`; appended if it exists")
     ri.add_argument("--json", action="store_true")
+    pm = sub.add_parser("promote", help="failures become candidate eval cases, deduplicated, with provenance")
+    psub = pm.add_subparsers(dest="promote_cmd", required=True)
+    pf = psub.add_parser("find", help="group failures by signature and propose new cases")
+    pf.add_argument("rows", nargs="+", help="attempt rows: eval runs or rules-only production rows")
+    pf.add_argument("--source", required=True, help="where the failures came from, e.g. production or nightly")
+    pf.add_argument("--label-from", default="none",
+                    help="who will write the expected answer: none (default), human, or model:<name>")
+    pf.add_argument("--existing", help="the eval set's cases file (JSONL of {case, tags}); its cases are skipped")
+    pf.add_argument("--group-by", help="tag prefix that splits signatures, e.g. intent")
+    pf.add_argument("--per-signature", type=int, default=3, help="cases proposed per signature (default 3)")
+    pf.add_argument("--found", help="date tag (default: today, UTC)")
+    pf.add_argument("--out", required=True, help="candidates JSONL; set \"approved\": true on the ones to keep")
+    pa = psub.add_parser("accept", help="append approved candidates to the eval set; print its provenance mix")
+    pa.add_argument("candidates")
+    pa.add_argument("--into", required=True, help="the eval set's cases file (created if missing)")
     switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
         return switch_cli.run(args)
     if args.cmd == "review":
         return _review(args)
+    if args.cmd == "promote":
+        return _promote(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))
