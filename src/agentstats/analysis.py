@@ -126,8 +126,9 @@ def _headline(design: str, runs: dict[int, float], counts: dict[str, tuple[int, 
         notes.append(f"Can't use a clustered interval: {why}. Falling back to the curated (run-level) design.")
         design = "curated"
     if design == "sampled":
-        if k == 1:
-            notes.append("One run: per-case outcomes are binary, so a Wilson interval is used.")
+        if k <= 1 or len(p) < 2:               # one run, or too few graded cases (none, for rules-only rows)
+            if k == 1:
+                notes.append("One run: per-case outcomes are binary, so a Wilson interval is used.")
             return wilson(total_c, total_n, conf), notes, alt
         if len(p) < 30:
             notes.append(f"Only {len(p)} cases: a per-case interval this small may be unreliable; add cases.")
