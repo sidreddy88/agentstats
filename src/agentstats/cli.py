@@ -35,6 +35,25 @@ def _load_many(paths: list[str], arm: str | None) -> list[records.Attempt]:
     return out
 
 
+def _review(args) -> int:
+    from agentstats import review
+    if args.review_cmd == "sample":
+        atts = _load_many(args.rows, None)
+        sheet, key, summary = review.sample(atts, args.n, stratify_by=args.stratify_by, seed=args.seed,
+                                            link=args.link)
+        sheet_path, key_path = review.write(args.out, sheet, key, summary)
+        print(f"wrote {sheet_path} ({len(sheet)} items: {summary['sampled']}) and {key_path}. "
+              "Give the reviewer only review.csv.")
+        return 0
+    labels, report = review.import_labels(args.sheet, args.key, rater=args.rater)
+    out = Path(args.out)
+    with out.open("a") as f:
+        f.writelines(json.dumps(r) + "\n" for r in labels)
+    print(json.dumps(report, indent=2) if args.json else review.render(report))
+    print(f"appended {len(labels)} label rows to {out}; run `agentstats judge {out}` for the full history")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="agentstats", description="Statistics for agent evals.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -115,10 +134,27 @@ def main(argv: list[str] | None = None) -> int:
     ic.add_argument("--dir", default=".")
     ic.add_argument("--force", action="store_true")
 
+    rv = sub.add_parser("review", help="sampled human review of graded attempts: is the grader right?")
+    rsub = rv.add_subparsers(dest="review_cmd", required=True)
+    rs = rsub.add_parser("sample", help="pick attempts for a person to review (blind sheet + key)")
+    rs.add_argument("rows", nargs="+", help="attempt rows: JSONL, Inspect logs or Harbor jobs (one per run)")
+    rs.add_argument("--n", type=int, default=40, help="how many to review (default 40)")
+    rs.add_argument("--stratify-by", help="tag prefix to spread the sample over, e.g. intent for intent:<name>")
+    rs.add_argument("--seed", type=int, default=0)
+    rs.add_argument("--link", help="link template for each item, e.g. 'https://traces/{case}?run={run}' ({arm} too)")
+    rs.add_argument("--out", required=True, help="a new directory: review.csv (for the reviewer), key.jsonl")
+    ri = rsub.add_parser("import", help="read a filled review sheet: label rows for `judge`, plus agreement")
+    ri.add_argument("sheet", help="the filled review.csv")
+    ri.add_argument("--key", required=True, help="key.jsonl written next to the sheet")
+    ri.add_argument("--rater", default="human", help="the reviewer's name (labels get rater human:<name>)")
+    ri.add_argument("--out", required=True, help="label rows (JSONL) for `agentstats judge`; appended if it exists")
+    ri.add_argument("--json", action="store_true")
     switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
         return switch_cli.run(args)
+    if args.cmd == "review":
+        return _review(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))

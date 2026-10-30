@@ -9,6 +9,7 @@ claim the numbers support.
 pip install agentstats        # Python 3.11+
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
+agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
 agentstats judge labels.jsonl
 agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
 agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
@@ -285,6 +286,15 @@ is `no_answer: limit_<type>`. Tool calls from the assistant messages fill `--rul
 tool calls become metrics; task, model and scalar sample metadata become tags (so `slice_by = "intent"` works).
 `.eval` files are zstd-compressed: they're read with inspect-ai's own reader when it's installed, or the standard
 library on Python 3.14+; otherwise `inspect log convert --to json` first.
+
+**Sampled human review** (`agentstats review sample ROWS --n 40 --stratify-by intent --link URL --out DIR`, then
+`agentstats review import DIR/review.csv --key DIR/key.jsonl --rater NAME --out labels.jsonl`): picks graded attempts
+for a person to check, favouring those where the verdict and the behaviour rules disagree (passed with a rule
+violated, or failed with every rule satisfied), then failures, then passes, spread over a tag. The sheet is blind
+(no verdicts, no reason for the pick); the key keeps each item's verdict, stratum and sampling weight. Import appends
+label rows for `agentstats judge` and reports the grader's agreement, leniency and strictness both on the sample and
+**reweighted to the population** (over-sampling disagreements would otherwise make the grader look worse than it is),
+with stratified bootstrap intervals.
 
 Judge labels (`agentstats judge`), one row per verdict:
 
