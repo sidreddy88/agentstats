@@ -54,9 +54,8 @@ import urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from agentstats.checks import run_checks
+from agentstats.checks import RULE_KINDS, run_checks, validate
 
-RULE_KINDS = ("called", "not_called", "before", "args")
 RULE_META = ("when", "why", "use")         # rule keys the engine reads; the rest go to the trajectory checks
 
 
@@ -143,6 +142,10 @@ def load_configs(config_dir: str | Path, adapters: dict[str, Adapter], names: li
             kinds = [k for k in (*RULE_KINDS, "output") if k in r]
             if "name" not in r or len(kinds) != 1:
                 raise ValueError(f"{path}: each rule needs a name and exactly one of {(*RULE_KINDS, 'output')}: {r}")
+            try:
+                validate(r)
+            except ValueError as e:
+                raise ValueError(f"{path}: {e}") from None
         out.append(cfg)
     return out
 
