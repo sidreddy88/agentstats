@@ -104,3 +104,15 @@ def test_cli_init_from_an_otlp_export(tmp_path, capsys):
     assert cli.main(["monitor", "--config-dir", str(tmp_path / "repo/agentstats/agents"), "--otlp",
                      str(tmp_path / "t.json"), "--all-spans", "--out", str(tmp_path / "mon")]) == 0
     assert "25 runs" in (tmp_path / "mon/report.md").read_text()
+
+
+
+def test_help_lists_every_command_once_in_a_group(capsys):
+    import pytest
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    out = capsys.readouterr().out
+    grouped = [n for _, names in cli.GROUPS for n in names]
+    assert len(grouped) == len(set(grouped)) and "Gate and compare:" in out
+    assert "Other:" not in out                       # a new command must be put in a group
+    assert all(f"  {n} " in out for n in grouped)
