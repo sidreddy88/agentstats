@@ -30,6 +30,7 @@ from collections import Counter, defaultdict
 from itertools import permutations
 from pathlib import Path
 
+from agentstats.checks import RULE_KINDS
 from agentstats.intervals import newcombe, wilson
 
 MIN_RUNS = 20            # fewer runs than this for an agent: too little to suggest rules from
@@ -158,7 +159,7 @@ def propose(runs: list[dict], config_dir: str | Path | None = None, conf: float 
     for agent in sorted(by_agent):
         rs = by_agent[agent]
         existing = configs.get(agent, {}).get("rules", [])
-        have = {json.dumps({k: v for k, v in r.items() if k in ("called", "before", "not_called", "args")},
+        have = {json.dumps({k: v for k, v in r.items() if k in RULE_KINDS},
                            sort_keys=True) for r in existing}
         if len(rs) < MIN_RUNS:
             n += 1

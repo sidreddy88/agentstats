@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-10-31)
 
+- Two rule kinds: `max_calls` (a tool, or `"*"`, called at most n times per run: over-retrieval) and
+  `max_repeats` (at most n calls identical to an earlier one, after case and whitespace are normalised: tool
+  flailing). On 952 recorded diagnosis runs (mostly SWE-bench replays), runs with 7+ searches ended with an accepted
+  diagnosis 8% of the time (81% otherwise), and runs repeating an identical call 50% (74% otherwise).
+- README: corrected the diagnosis monitoring figures, which had counted SWE-bench replays as production.
 - `agentstats --help` lists commands in groups by task (set up and monitor, gate and compare, check your
   graders, grow the eval set, read your data) instead of one flat list.
 
