@@ -102,6 +102,42 @@ def _grade(args, chat=None) -> int:
     return 0 if counts["judged"] else 3
 
 
+def _suggest(args) -> int:
+    from agentstats import suggest
+    if args.cmd == "suggest":
+        p = suggest.propose(suggest.load(args.trajectories), args.config_dir, conf=args.conf)
+        Path(args.out).write_text(json.dumps(p, indent=1) + "\n")
+        print(suggest.render(p))
+        print(f"wrote {args.out}. Accept items with `agentstats suggest-apply {args.out} --config-dir <dir>`.")
+        return 0
+    p = json.loads(Path(args.proposal).read_text())
+    rules = [it for it in p["items"] if it["kind"] == "rule"]
+    if args.all:
+        accept = [it["id"] for it in rules]
+    elif args.accept:
+        accept = [int(x) for x in args.accept.split(",") if x.strip()]
+    elif sys.stdin.isatty():
+        accept = []
+        for it in rules:
+            r = it["rule"]
+            spec = f"called {r['called']}" if "called" in r else f"{r['before'][0]} before {r['before'][1]}"
+            ans = input(f"[{it['id']}] {it['agent']}: {it['use']} rule {r['name']} ({spec}). {it['why']}. "
+                        "Accept? [y/N] ")
+            if ans.strip().lower().startswith("y"):
+                accept.append(it["id"])
+    else:
+        print("not a terminal: pass --accept <ids> or --all")
+        return 2
+    written = suggest.apply(p, args.config_dir, accept)
+    print(f"accepted {len(accept)} item(s); wrote {', '.join(written) or 'nothing'}")
+    advice = [it for it in p["items"] if it["kind"] == "advice"]
+    if advice:
+        print("advice (not written, act on it yourself):")
+        for it in advice:
+            print(f"  [{it['id']}] {it['agent']}: {it['text']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="agentstats", description="Statistics for agent evals.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -225,6 +261,18 @@ def main(argv: list[str] | None = None) -> int:
     gr.add_argument("--fields", help="comma-separated item fields to show the judge (default: all but ids/tags)")
     gr.add_argument("--out", required=True, help="judge label rows (JSONL) for `agentstats judge`")
     gr.add_argument("--rows", help="also write attempt rows whose checks are the rubric answers")
+    sg = sub.add_parser("suggest", help="propose behaviour rules and eval advice per agent from its trajectories")
+    sg.add_argument("trajectories", nargs="+",
+                    help='JSONL: {"agent", "case", "passed": true|false|null, "tools": [...]}')
+    sg.add_argument("--config-dir",
+                    help="existing per-agent configs (<dir>/<agent>.json); configured rules are skipped")
+    sg.add_argument("--out", default="proposal.json", help="where to write the proposal (default proposal.json)")
+    sg.add_argument("--conf", type=float, default=0.95)
+    sa = sub.add_parser("suggest-apply", help="accept or reject each proposed item; writes only accepted rules")
+    sa.add_argument("proposal")
+    sa.add_argument("--config-dir", required=True, help="where per-agent configs live (created if missing)")
+    sa.add_argument("--accept", help="comma-separated item ids to accept (skips the questions)")
+    sa.add_argument("--all", action="store_true", help="accept every rule item")
     switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
@@ -235,6 +283,8 @@ def main(argv: list[str] | None = None) -> int:
         return _promote(args)
     if args.cmd == "grade":
         return _grade(args)
+    if args.cmd in ("suggest", "suggest-apply"):
+        return _suggest(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))

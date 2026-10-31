@@ -10,6 +10,7 @@ pip install agentstats        # Python 3.11+
 agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
+agentstats suggest trajectories.jsonl --config-dir config/agents     # what to evaluate, with evidence
 agentstats grade items.jsonl --rubric rubric.json --model MODEL --base-url URL --repeats 3 --out labels.jsonl
 agentstats judge labels.jsonl
 agentstats promote find prod_rows.jsonl --source production --existing evals/cases.jsonl --out candidates.jsonl
@@ -293,6 +294,19 @@ is `no_answer: limit_<type>`. Tool calls from the assistant messages fill `--rul
 tool calls become metrics; task, model and scalar sample metadata become tags (so `slice_by = "intent"` works).
 `.eval` files are zstd-compressed: they're read with inspect-ai's own reader when it's installed, or the standard
 library on Python 3.14+; otherwise `inspect log convert --to json` first.
+
+**What to evaluate, suggested from trajectories** (`agentstats suggest trajectories.jsonl --config-dir
+config/agents --out proposal.json`, then `agentstats suggest-apply proposal.json --config-dir config/agents`): input is
+one JSON line per agent run, `{"agent", "case", "passed": true|false|null, "tools": [...], "end": "..."}` (null for
+ungraded production runs). For each agent it mines candidate behaviour rules from the tool sequences (`called`, and
+`before` for orderings that really occur, not ones implied by a tool that always comes first) and, with graded runs,
+measures each rule's effect: the pass rate when it held vs when it was broken, with a Newcombe interval. A rule whose
+breaking is proven to hurt is proposed as a **gate**; one with no proven effect as **monitor** only. A final text
+repeated word for word in runs that didn't pass (a step-limit message, a fallback) becomes advice to label it as a
+no-answer reason; agents with too few runs or no graded runs get advice too. Rules already in the agent's config are
+listed, not re-proposed. `suggest-apply` asks item by item (or `--accept 1,3` / `--all`) and writes only accepted rules
+into `<config-dir>/<agent>.json`. On agent-platform's recorded diagnosis runs, with no configs, it proposed
+`called_submit_diagnosis` as a gate (0% pass when broken vs 89% when held, 92 broken runs): the rule chosen by hand.
 
 **LLM judge on yes/no rubric questions** (`agentstats grade items.jsonl --rubric rubric.json --model MODEL
 --base-url URL --api-key-env VAR --repeats 3 --out labels.jsonl --rows rows.jsonl`): items are

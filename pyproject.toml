@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentstats"
-version = "0.4.0"
+version = "0.5.0"
 description = "Statistics for agent evals: from trajectories to claims you can defend (CIs chosen by how your eval set was built, pass^k, infra failures kept apart, CI gates, behaviour rules, judge checks, pre-registered model-switch decisions)."
 readme = "README.md"
 license = "MIT"
