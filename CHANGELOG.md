@@ -2,6 +2,11 @@
 
 ## 0.6.0 (2026-10-31)
 
+**Setup**
+- `agentstats init`: finds the agents in your traces (Langfuse or OpenTelemetry), runs `suggest` on each and asks
+  which rules to keep, then writes the agent configs, a weekly monitoring workflow and the CI gate starters. Existing
+  files are left alone unless `--force`.
+
 **Monitoring**
 - `agentstats monitor`: production traces (Langfuse API or an OpenTelemetry GenAI export) -> per-agent behaviour rule
   rates with intervals by source and model, infrastructure failures kept apart, optional rubric judge with a flip-rate

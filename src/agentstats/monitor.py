@@ -231,6 +231,12 @@ class LangfuseSource:
                                     get=self.get)
         return join_traces(agents, self._tools, self._gens)
 
+    def agent_names(self, observation_type: str = "AGENT") -> Counter:
+        """Agent span name -> runs in the window (for `agentstats init`)."""
+        # The name is in the "basic" field group, not "core".
+        return Counter(o.get("name") for o in fetch_observations(observation_type, self.start, self.end,
+                                                                 get=self.get, fields="core,basic") if o.get("name"))
+
     def link(self, traces: list[dict]) -> str:
         """Langfuse UI link template for the review sheet ({case} is the trace id)."""
         base = (os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST")
@@ -254,13 +260,28 @@ def _attrs(items: list[dict]) -> dict:
     return {a["key"]: _attr_value(a.get("value", {})) for a in items or []}
 
 
+NOT_AGENT_OPS = ("execute_tool", "chat", "text_completion", "generate_content", "embeddings")
+
+
+def _agent_name(span: dict) -> str | None:
+    """The agent a span is the run of, or None: an `invoke_agent` span, or one naming `gen_ai.agent.name` that isn't
+    a tool or model call (SDKs copy the agent name onto those too)."""
+    op = span["_a"].get("gen_ai.operation.name")
+    if op in NOT_AGENT_OPS:
+        return None
+    if op == "invoke_agent" or span["_a"].get("gen_ai.agent.name"):
+        return span["_a"].get("gen_ai.agent.name") or span.get("name")
+    return None
+
+
 def _iso(nanos) -> str:
     return dt.datetime.fromtimestamp(int(nanos) / 1e9, dt.UTC).isoformat()
 
 
 class OtlpSource:
-    """OTLP JSON exports (a file, or JSONL of export requests). The agent run is the span whose `gen_ai.agent.name`
-    (or, failing that, span name) is the config's agent; its tool calls are the `execute_tool` spans in the same
+    """OTLP JSON exports (a file, or JSONL of export requests). The agent run is the `invoke_agent` span (or one
+    carrying `gen_ai.agent.name`, not a tool or model call) whose agent name, or failing that span name, is the
+    config's agent; its tool calls are the `execute_tool` spans in the same
     trace. Input and output come from `gen_ai.input.messages` / `gen_ai.output.messages` (or `input.value` /
     `output.value`), the environment from the `deployment.environment.name` resource attribute."""
 
@@ -288,8 +309,7 @@ class OtlpSource:
         out = []
         for tid, spans in self.spans.items():
             spans = sorted(spans, key=lambda s: int(s.get("startTimeUnixNano", 0)))
-            agent = next((s for s in spans if (s["_a"].get("gen_ai.agent.name") or s.get("name")) == cfg["agent"]
-                          and s["_a"].get("gen_ai.operation.name") != "execute_tool"), None)
+            agent = next((s for s in spans if _agent_name(s) == cfg["agent"]), None)
             if agent is None:
                 continue
             a, r = agent["_a"], agent["_r"]
@@ -314,6 +334,14 @@ class OtlpSource:
                                   "environment": (r.get("deployment.environment.name")
                                                   or r.get("deployment.environment")),
                                   "metadata": a}})
+        return out
+
+    def agent_names(self, observation_type: str = "AGENT") -> Counter:
+        """Agent name -> runs (for `agentstats init`): spans naming a `gen_ai.agent.name` or of operation
+        `invoke_agent`, one per trace."""
+        out: Counter = Counter()
+        for spans in self.spans.values():
+            out.update({n for n in (_agent_name(s) for s in spans) if n})
         return out
 
     def link(self, traces: list[dict]) -> str:

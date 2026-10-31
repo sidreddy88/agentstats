@@ -5,6 +5,21 @@ it tells you how good the agent is, how reliable it is, whether version B is rea
 cheaper model is shown to be no worse. Every number comes with a confidence interval, and the report says which
 claim the numbers support.
 
+**Start here, if your agents are traced** (Langfuse, or OpenTelemetry with the GenAI conventions):
+
+```bash
+pip install agentstats
+agentstats init --days 14       # finds your agents, suggests rules to check, asks which to keep, writes the setup
+agentstats monitor --config-dir agentstats/agents --days 7 --out monitor     # the first report, now
+```
+
+`init` writes one config per agent (`agentstats/agents/`), a weekly GitHub workflow that files `agentstats monitor`'s
+report as an issue, and starter CI gates (`agentstats.toml`, smoke / nightly / release workflows). It asks before
+writing each rule and never overwrites a file without `--force`. On agent-platform's real traces it found four agents,
+one of them missing from the hand-written monitoring, and proposed the same triage rule chosen by hand.
+
+Everything else:
+
 ```bash
 pip install agentstats        # Python 3.11+
 agentstats summary jobs/run1 jobs/run2 jobs/run3
