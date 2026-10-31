@@ -6,6 +6,8 @@
   "did the agent get it right?", GPT-5.5 reviewing 20 triage runs passed all 7 whose stated occurrence count had no
   lookup behind it; a rubric that asks whether each count appears in the tool results caught all 7. A person reading
   the same sheet could miss them the same way, so the sheet can now say what to check.
+- README: the 0.7.0 correction overreached. Its "real incidents vs SWE-bench" comparison was one incident replayed 36
+  times against 919 SWE-bench cases; now stated as that.
 
 ## 0.8.0 (2026-10-31)
 
