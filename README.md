@@ -218,10 +218,11 @@ Each agent is a JSON config (`init` writes them, `suggest-apply` adds rules):
 issue. Its first weeks found:
 - the triage agent, on its previous model, calling a required lookup tool in only 44% of production runs (CI 29% to
   61%) while reporting counts it had made up. The labels had rewarded those counts, so accuracy checks couldn't see it;
-- that the diagnosis agent does far worse on real incidents than on its benchmark: over 60 days, 27 of 36 runs on real
-  incidents ended at the step limit, against 25% of 919 SWE-bench replays, and only 58% of real-incident runs stayed
-  within six code searches (90% on SWE-bench). The replays had been counted as production until a tagging fix (they
-  predated environment tags), which is what an earlier, rosier figure in this README rested on;
+- that production diagnosis traffic was almost all SWE-bench replays: 919 of 955 runs in 60 days, counted as
+  production until a tagging fix (they predated environment tags). An earlier figure in this README ("37% of
+  submissions rejected, 27% at the step limit") rested on that mix and was withdrawn. The remaining 36 production runs
+  are one incident replayed (31 of them ended at the step limit), too narrow to say how diagnosis does on real
+  incidents in general;
 - the triage judge flipping its verdict on 25% of items between two identical runs. A refined rubric brought that to
   2.5%; separately, a rubric question named as a double negative made the judge answer backwards, so `grade` now warns
   about negated names.

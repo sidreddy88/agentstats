@@ -293,3 +293,17 @@ def test_otlp_previous_window_counts(tmp_path):
     later = monitor.OtlpSource([tmp_path / "t.json"], END, END + (END - START))
     assert later.previous_count(cfg, ad) == {"production": 4} and later.traces(cfg) == []
     assert monitor.OtlpSource([tmp_path / "t.json"]).previous_count(cfg, ad) is None
+
+
+def test_review_instructions_from_the_config_head_the_review_sheet(tmp_path, monkeypatch):
+    rubric = tmp_path / "rubric.json"
+    rubric.write_text(json.dumps([{"name": "ok", "question": "OK?", "pass": "yes"}]))
+    cfg_dir = write_configs(tmp_path / "cfg", rubric=str(rubric), review_n=4,
+                            review_instructions="Check every stated count against the tool results.")
+    monkeypatch.setenv("FAKE_KEY", "x")
+    monkeypatch.setattr(judge_run, "http_chat", lambda *a, **k: (lambda messages: '{"ok": "yes"}'))
+    monitor.run(cfg_dir, tmp_path / "out", source=monitor.LangfuseSource(START, END, get=fake_get(*lf_runs())),
+                start=START, end=END, judge_settings=monitor.JudgeSettings("m", key_env="FAKE_KEY"),
+                log=lambda *_: None)
+    md = (tmp_path / "out" / "support" / "review" / "REVIEW.md").read_text()
+    assert md.index("**What to check:** Check every stated count") < md.index("## 1.")

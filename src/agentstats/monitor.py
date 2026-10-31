@@ -16,6 +16,7 @@ Each agent is a config file, <config-dir>/<name>.json:
   adapter        name of an adapter (from --adapters) for logic a config can't express (default "default")
   observation_type   Langfuse observation type of the agent span (default AGENT)
   rubric, judge_fields, judge_sample, review_n   the rubric judge and the human review sample (optional)
+  review_instructions   what a reviewer should check for this agent, printed atop its review sheet (optional)
   group_by       tag prefix for candidate eval cases (optional)
 `agentstats suggest-apply` writes this format, so accepted suggestions are monitored the next run.
 
@@ -561,7 +562,8 @@ class JudgeSettings:
                                                                                  repeats)
 
 
-def write_review_helper(out: Path, items: dict[str, dict], link: str, fields: list[str]) -> None:
+def write_review_helper(out: Path, items: dict[str, dict], link: str, fields: list[str],
+                        instructions: str | None = None) -> None:
     """REVIEW.md next to the blind sheet: each sampled run's material (what the judge saw, never its verdict) with a
     trace link, numbered in the sheet's order. Raw text: it stays in the output folder, never in the report."""
     import csv
@@ -572,6 +574,8 @@ def write_review_helper(out: Path, items: dict[str, dict], link: str, fields: li
     md = ["# Review sheet helper", "", "For each run, decide whether the agent got it right. Write pass, fail or "
           "unsure in the human_verdict column of review.csv (same order). The judge's verdict is deliberately not "
           "shown.", ""]
+    if instructions:
+        md += ["**What to check:** " + instructions.strip(), ""]
     for n, r in enumerate(rows, 1):
         it = items.get(r["case"], {})
         url = link.format(case=r["case"]) if link else ""
@@ -625,7 +629,7 @@ def judge(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, settings: 
     n = cfg.get("review_n", 20)
     _cli("review", "sample", str(rows_path), "--n", str(n), "--stratify-by", "source", "--seed", str(seed),
          "--out", str(out / "review"), *(["--link", link] if link else []))
-    write_review_helper(out, {i["case"]: i for i in sample}, link, fields)
+    write_review_helper(out, {i["case"]: i for i in sample}, link, fields, cfg.get("review_instructions"))
     return summary, (f"{n} judged runs sampled for review: read `{cfg['key']}/review/REVIEW.md` (each run's material "
                      f"and a trace link) and fill `{cfg['key']}/review/review.csv`; the judge's verdicts and sampling "
                      f"weights are in `{cfg['key']}/review/key.jsonl`.")
