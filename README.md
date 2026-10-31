@@ -11,6 +11,7 @@ agentstats summary jobs/run1 jobs/run2 jobs/run3
 agentstats compare --a jobs/baseline --b jobs/candidate
 agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
 agentstats suggest trajectories.jsonl --config-dir config/agents     # what to evaluate, with evidence
+agentstats monitor --config-dir config/agents --days 7 --out weekly/  # production traces -> weekly report
 agentstats grade items.jsonl --rubric rubric.json --model MODEL --base-url URL --repeats 3 --out labels.jsonl
 agentstats judge labels.jsonl
 agentstats promote find prod_rows.jsonl --source production --existing evals/cases.jsonl --out candidates.jsonl
@@ -307,6 +308,20 @@ no-answer reason; agents with too few runs or no graded runs get advice too. Rul
 listed, not re-proposed. `suggest-apply` asks item by item (or `--accept 1,3` / `--all`) and writes only accepted rules
 into `<config-dir>/<agent>.json`. On agent-platform's recorded diagnosis runs, with no configs, it proposed
 `called_submit_diagnosis` as a gate (0% pass when broken vs 89% when held, 92 broken runs): the rule chosen by hand.
+
+**Monitoring agents from production traces** (`agentstats monitor --config-dir config/agents --days 7 --out weekly/`,
+Langfuse keys in the environment; or `--otlp traces.json` for an OpenTelemetry export using the GenAI semantic
+conventions): one JSON config per agent names its span and lists behaviour rules (the same rule kinds as `check`, plus
+rules on the agent's output, each optionally conditional with `"when"`). For each agent it fetches the window's runs
+and their tool and LLM calls, makes one rules-only row per run tagged by source (the trace's environment) and model,
+counts errored runs as infrastructure failures, and reports each rule's rate with a Wilson interval per source and
+model, flagging rules proven below `--rule-floor`. With `--judge --judge-model M` it runs the agent's rubric on a
+sample twice (flagged unreliable above a 10% flip rate) and writes a blind review sheet for a person; production
+failures become candidate eval cases (`promote find`); `suggest` proposes new rules against the configs. The report
+has aggregates and trace ids only; raw text stays in the output folder for the reviewer. Logic a config can't express
+(parsing an answer out of free text, a check that needs code) goes in an adapter file passed with `--adapters`
+(`ADAPTERS = {"name": MyAdapter()}`, subclasses of `agentstats.monitor.Adapter`). agent-platform runs it weekly on
+seven agents from GitHub Actions and files the report as an issue.
 
 **LLM judge on yes/no rubric questions** (`agentstats grade items.jsonl --rubric rubric.json --model MODEL
 --base-url URL --api-key-env VAR --repeats 3 --out labels.jsonl --rows rows.jsonl`): items are

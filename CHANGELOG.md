@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 (2026-10-31)
+
+**Monitoring**
+- `agentstats monitor`: production traces (Langfuse API or an OpenTelemetry GenAI export) -> per-agent behaviour rule
+  rates with intervals by source and model, infrastructure failures kept apart, optional rubric judge with a flip-rate
+  check and a blind human review sheet, production failures as candidate eval cases, suggested rules, one report.
+  Agents are JSON configs (the format `suggest-apply` writes); code-only logic goes in an adapter file. Moved out of
+  agent-platform's weekly job so any agent system can use it.
+
 ## 0.5.0 (2026-10-31)
 
 **Suggestions**
