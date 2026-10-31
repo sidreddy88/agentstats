@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import threading
 
 import pytest
 
@@ -184,9 +185,15 @@ def test_an_unstable_judge_is_reported_as_unreliable(tmp_path, monkeypatch):
     rubric = tmp_path / "rubric.json"
     rubric.write_text(json.dumps([{"name": "ok", "question": "OK?", "pass": "yes"}]))
     cfg_dir = write_configs(tmp_path / "cfg", rubric=str(rubric), review_n=5)
-    replies = iter(['{"ok": "yes"}', '{"ok": "no"}'] * 100)
+    seen: dict[str, int] = {}
+    lock = threading.Lock()
+
+    def flip(messages):                      # per item: yes the first time, no the second (grade runs in threads)
+        with lock:
+            n = seen[messages[-1]["content"]] = seen.get(messages[-1]["content"], 0) + 1
+        return '{"ok": "yes"}' if n % 2 else '{"ok": "no"}'
     monkeypatch.setenv("FAKE_KEY", "x")
-    monkeypatch.setattr(judge_run, "http_chat", lambda *a, **k: (lambda messages: next(replies)))
+    monkeypatch.setattr(judge_run, "http_chat", lambda *a, **k: flip)
     report = monitor.run(cfg_dir, tmp_path / "out", source=monitor.LangfuseSource(START, END, get=fake_get(*lf_runs())),
                          start=START, end=END, judge_settings=monitor.JudgeSettings("m", key_env="FAKE_KEY"),
                          log=lambda *_: None)
