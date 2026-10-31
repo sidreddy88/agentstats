@@ -1,26 +1,41 @@
 # agentstats
 
-Statistics for agent evals. Point it at your agent's runs (Harbor jobs, ATIF trajectories or a JSONL file) and
-it tells you how good the agent is, how reliable it is, whether version B is really better than A, and whether a
-cheaper model is shown to be no worse. Every number comes with a confidence interval, and the report says which
-claim the numbers support.
+Evals for agent systems, with the statistics done right. agentstats gates pull requests, checks main every night,
+monitors production from your traces, and turns production failures into new eval cases. Point it at your agent's runs
+(Harbor jobs, ATIF trajectories, Inspect AI logs, Langfuse or OpenTelemetry traces, or a JSONL file) and it tells you
+how good the agent is, how reliable it is, whether version B is really better than A, and whether a cheaper model is
+shown to be no worse. Every number comes with a confidence interval, and the report says which claim the numbers
+support.
+
+**Start here, if your agents are traced** (Langfuse, or OpenTelemetry with the GenAI conventions):
 
 ```bash
-pip install agentstats        # Python 3.11+
-agentstats summary jobs/run1 jobs/run2 jobs/run3
-agentstats compare --a jobs/baseline --b jobs/candidate
-agentstats review sample rows.jsonl --n 40 --stratify-by intent --out review/wk1   # blind sheet for a person
-agentstats suggest trajectories.jsonl --config-dir config/agents     # what to evaluate, with evidence
-agentstats grade items.jsonl --rubric rubric.json --model MODEL --base-url URL --repeats 3 --out labels.jsonl
-agentstats judge labels.jsonl
-agentstats promote find prod_rows.jsonl --source production --existing evals/cases.jsonl --out candidates.jsonl
-agentstats gate --policy agentstats.toml --tier nightly --candidate results/ --baseline baseline/
-agentstats convert-traces traces.json --format otlp --rules rules.json --out rows.jsonl   # or --format langfuse
-agentstats summary logs/my-task.eval                     # Inspect AI logs are read directly
-agentstats preregister --name my-switch --margin 0.03 --provenance independent --out decisions/my-switch
-agentstats switch --prereg decisions/my-switch/prereg.json --current current.jsonl --candidate cheap.jsonl \
-    --out decisions/my-switch
+pip install agentstats
+agentstats init --days 14       # finds your agents, suggests rules to check, asks which to keep, writes the setup
+agentstats monitor --config-dir agentstats/agents --days 7 --out monitor     # the first report, now
 ```
+
+`init` writes one config per agent (`agentstats/agents/`), a weekly GitHub workflow that files `agentstats monitor`'s
+report as an issue, and starter CI gates (`agentstats.toml`, smoke / nightly / release workflows). It asks before
+writing each rule and never overwrites a file without `--force`. On agent-platform's real traces it found four agents,
+one of them missing from the hand-written monitoring, and proposed the same triage rule chosen by hand.
+
+Or pick what you need (Python 3.11+, one runtime dependency: scipy):
+
+| You want to | Command |
+|---|---|
+| set up evals from your traces in one step | `agentstats init` |
+| know how good and how reliable the agent is | `agentstats summary RUNS...` |
+| know whether B really beats A | `agentstats compare --a RUNS --b RUNS` |
+| block a regressing pull request, check main nightly | `agentstats gate --policy agentstats.toml --tier pr` (starter files: `agentstats init-ci`) |
+| know whether your gate would catch a drop before trusting it | `agentstats size --baseline baseline.jsonl` |
+| watch production agents weekly from their traces | `agentstats monitor --config-dir agentstats/agents --days 7 --out monitor` |
+| find out what to check for each agent | `agentstats suggest trajectories.jsonl`, then `suggest-apply` |
+| grade with an LLM judge, and check the judge | `agentstats grade ...`, `agentstats judge labels.jsonl` |
+| have a person check a sample of verdicts | `agentstats review sample` / `review import` |
+| turn production failures into eval cases | `agentstats promote find` / `promote accept` |
+| decide whether a cheaper model is good enough | `agentstats preregister`, then `agentstats switch` |
+| use Harbor, Inspect AI or trace exports | `agentstats convert`, `agentstats convert-traces` (Inspect logs are read directly) |
 
 **See it on two real agents:** [examples/acme](https://github.com/sidreddy88/agentstats/tree/main/examples/acme)
 replays "a week at Acme" (a support agent and an Inspect coding agent) from recorded runs: a PR blocked at smoke, a
@@ -163,7 +178,51 @@ lookup was called in 52.5% (CI 40.2% to 64.5%). The rules now run in that agent'
   check flagged it (whole runs varying 8x more than per-case randomness predicts, p = 0.005), so the narrow interval
   wasn't trusted (see the example above).
 
+**Nightly, and a second gate.** The same agent's eval set replays against main every night (`--tier nightly`), to
+catch regressions that come with no code change: a provider's model update, a dependency upgrade. It reruns once on
+INCONCLUSIVE and opens or closes a GitHub issue itself; one night's run can see drops of about 2.4 points. The nightly
+tier also checks reliability (pass^2 at least 85%), cost (at most 1.25x the baseline) and p95 latency (at most 1.5x),
+limits that raised no false alarm in 200 simulated nights of an unchanged agent. The same system's diagnosis agent is
+gated on 434 cases; simulated on its baseline, the agentstats decision false-alarms on 0.9% of unchanged PRs and catches
+94.5% of real 3-point drops, matching the hand-built gate it replaced on 99.5-100% of PRs.
 
+## Monitoring production agents
+
+Gates only see your eval set. `agentstats monitor` reads what the agents actually did in production, from Langfuse or
+an OpenTelemetry export, and writes one report per run, with a section per agent:
+
+- **behaviour rules** per source (production, staging, eval) and model, each with an interval, flagged when proven
+  below a floor;
+- errored runs counted as **infrastructure failures**, and runs with **no usable answer** counted apart;
+- an optional **LLM judge** on a sample, run twice so its flip rate is reported (above 10%, its verdicts are marked
+  unreliable), and a **blind review sheet** so a person can check the judge;
+- production failures grouped into **candidate eval cases**, and **suggested rules** for each agent, with evidence.
+
+The report holds counts and trace ids only. Raw inputs stay in the output folder for the reviewer.
+
+Each agent is a JSON config (`init` writes them, `suggest-apply` adds rules):
+
+```json
+{"agent": "DiagnosisAgent",
+ "rules": [{"name": "submitted_via_tool", "called": "submit_diagnosis"},
+           {"name": "read_before_first_submit", "before": ["get_file_contents", "submit_diagnosis"]}],
+ "rubric": "agentstats/diagnosis_rubric.json"}
+```
+
+**In production:** it monitors seven agents in an incident-response system each week and files the report as a GitHub
+issue. Its first weeks found:
+- the triage agent, on its previous model, calling a required lookup tool in only 44% of production runs (CI 29% to
+  61%) while reporting counts it had made up. The labels had rewarded those counts, so accuracy checks couldn't see it;
+- the diagnosis agent's grounding check rejecting 26 of 71 submitted diagnoses (37%), and 17 of 62 diagnosis runs
+  (27%) ending at the step limit without an accepted answer (its first two weeks, real incidents in production and
+  replayed locally);
+- the triage judge flipping its verdict on 25% of items between two identical runs. A refined rubric brought that to
+  2.5%; separately, a rubric question named as a double negative made the judge answer backwards, so `grade` now warns
+  about negated names.
+
+On the same week of real traces, `agentstats monitor` produced byte-identical rows to the hand-written script it
+replaced. Logic a config can't express (parsing an answer out of free text, a check that needs code) goes in an adapter
+file passed with `--adapters` (`ADAPTERS = {"name": MyAdapter()}`, subclasses of `agentstats.monitor.Adapter`).
 
 ## Deciding a model switch: `agentstats preregister` and `agentstats switch`
 
@@ -385,6 +444,10 @@ to agentstats:
 - **model-switch decisions** (`agentstats switch`): non-inferiority plus cost per accepted result, as-is and adapted
   steps, an eval-set provenance warning, and **checked pre-registration** (committed before the results, inputs
   hashed), with a decision record;
+- **suggested checks with evidence** (`agentstats suggest`): behaviour rules mined from trajectories, each with the
+  pass rate when it held vs when it was broken, proposed as a gate only when breaking it is proven to hurt;
+- **production monitoring and one-step setup** (`agentstats monitor`, `agentstats init`) built on the pieces above,
+  so a team with traced agents gets configs, a weekly report and CI gate starters from its own traces;
 - **calibration tests** that fail if the statistics drift (e.g. the drop gate's false-alarm rate);
 - reading Harbor jobs and ATIF trajectories, and the production results above.
 
@@ -405,6 +468,10 @@ UNHEALTHY on infrastructure failures and keeping them out of pass rates are also
 ## Limitations
 
 - Pass rates need pass/fail verdicts; numeric scores are used for efficiency metrics and judge consistency.
+- Monitoring is batch (weekly or on demand), not real-time: nothing alerts within minutes of a bad run. Production
+  runs are unlabelled, so monitoring checks behaviour and a judged sample, not accuracy.
+- `init` and `monitor` read Langfuse (observations of type AGENT by default, `--observation-type` otherwise) and
+  OpenTelemetry exports using the GenAI conventions; other trace stores need an export to one of those first.
 - Power analysis is by simulation (`agentstats size`) for the two gate rules; no closed-form sample-size planner.
 - The judge check uses the judge's most common verdict per item; it does not correct downstream statistics for
   judge error (evalstats does).

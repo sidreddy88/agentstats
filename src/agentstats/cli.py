@@ -1,5 +1,5 @@
 """agentstats command line: summary, compare, judge, check, convert, sample, gate, size, init-ci,
-preregister, switch."""
+preregister, switch, review, promote, grade, suggest, monitor, init."""
 from __future__ import annotations
 
 import argparse
@@ -102,6 +102,54 @@ def _grade(args, chat=None) -> int:
     return 0 if counts["judged"] else 3
 
 
+def _init(args) -> int:
+    from agentstats import initialize, monitor
+    start, end = initialize.window(args.days)
+    if args.otlp:
+        source = monitor.OtlpSource(args.otlp, None if args.all_spans else start, None if args.all_spans else end)
+    else:
+        source = monitor.LangfuseSource(start, end)
+    interactive = sys.stdin.isatty() and not args.no_input
+    if not (args.yes or interactive or args.no_input):
+        print("not a terminal: pass --yes (accept every suggested rule) or --no-input (accept none)")
+        return 2
+    base_url = (os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST")
+                or "https://cloud.langfuse.com").rstrip("/")
+    try:
+        result = initialize.run(args.dir, source, accept_all=args.yes, interactive=interactive, force=args.force,
+                                otlp=bool(args.otlp), base_url=base_url, observation_type=args.observation_type)
+    except ValueError as e:
+        print(f"agentstats init: {e}")
+        return 2
+    print(initialize.next_steps(result, otlp=bool(args.otlp)))
+    return 0
+
+
+def _monitor(args) -> int:
+    import datetime as dt
+
+    from agentstats import monitor
+    end = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    start = end - dt.timedelta(days=args.days)
+    if args.otlp:
+        source = monitor.OtlpSource(args.otlp, None if args.all_spans else start, None if args.all_spans else end)
+    else:
+        source = monitor.LangfuseSource(start, end)
+    settings = None
+    if args.judge:
+        if not args.judge_model:
+            print("--judge needs --judge-model (and --judge-base-url / --judge-key-env for a non-OpenAI endpoint)")
+            return 2
+        settings = monitor.JudgeSettings(args.judge_model, args.judge_base_url, args.judge_key_env,
+                                         max_flips=args.judge_max_flips)
+    report = monitor.run(args.config_dir, args.out, source=source, start=start, end=end,
+                         adapters=monitor.load_adapters(args.adapters),
+                         agents=args.agents.split(",") if args.agents else None, judge_settings=settings,
+                         seed=args.seed, floor=args.rule_floor, labels_dir=args.labels_dir, link=args.link)
+    print(f"wrote {report}")
+    return 0
+
+
 def _suggest(args) -> int:
     from agentstats import suggest
     if args.cmd == "suggest":
@@ -117,14 +165,8 @@ def _suggest(args) -> int:
     elif args.accept:
         accept = [int(x) for x in args.accept.split(",") if x.strip()]
     elif sys.stdin.isatty():
-        accept = []
-        for it in rules:
-            r = it["rule"]
-            spec = f"called {r['called']}" if "called" in r else f"{r['before'][0]} before {r['before'][1]}"
-            ans = input(f"[{it['id']}] {it['agent']}: {it['use']} rule {r['name']} ({spec}). {it['why']}. "
-                        "Accept? [y/N] ")
-            if ans.strip().lower().startswith("y"):
-                accept.append(it["id"])
+        from agentstats.initialize import ask
+        accept = ask(rules)
     else:
         print("not a terminal: pass --accept <ids> or --all")
         return 2
@@ -273,6 +315,34 @@ def main(argv: list[str] | None = None) -> int:
     sa.add_argument("--config-dir", required=True, help="where per-agent configs live (created if missing)")
     sa.add_argument("--accept", help="comma-separated item ids to accept (skips the questions)")
     sa.add_argument("--all", action="store_true", help="accept every rule item")
+    it = sub.add_parser("init", help="set up evals from your traces: agent configs, weekly monitoring, CI gates")
+    it.add_argument("--dir", default=".", help="repository root to write into (default .)")
+    it.add_argument("--days", type=int, default=14, help="look back this many days for runs (default 14)")
+    it.add_argument("--otlp", nargs="+", help="read OpenTelemetry (OTLP JSON) exports instead of the Langfuse API")
+    it.add_argument("--all-spans", action="store_true", help="with --otlp: ignore --days, use every span")
+    it.add_argument("--observation-type", default="AGENT", help="Langfuse observation type of agent runs (AGENT)")
+    it.add_argument("--yes", action="store_true", help="accept every suggested rule without asking")
+    it.add_argument("--no-input", action="store_true", help="accept no rules; write empty configs and workflows")
+    it.add_argument("--force", action="store_true", help="overwrite existing workflow and policy files")
+    mo = sub.add_parser("monitor", help="monitor agents from production traces: rules, judge, review, candidates")
+    mo.add_argument("--config-dir", required=True, help="one JSON config per agent (see `agentstats.monitor`)")
+    mo.add_argument("--out", required=True, help="output folder: report.md plus one subfolder per agent")
+    mo.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
+    mo.add_argument("--otlp", nargs="+", help="read OpenTelemetry (OTLP JSON) exports instead of the Langfuse API")
+    mo.add_argument("--all-spans", action="store_true", help="with --otlp: ignore --days, use every span in the files")
+    mo.add_argument("--agents", help="comma-separated config names (default: every config)")
+    mo.add_argument("--adapters", help="Python file defining ADAPTERS for logic a config can't express")
+    mo.add_argument("--judge", action="store_true", help="run each agent's rubric judge on a sample")
+    mo.add_argument("--judge-model")
+    mo.add_argument("--judge-base-url", default="https://api.openai.com/v1")
+    mo.add_argument("--judge-key-env", default="OPENAI_API_KEY")
+    mo.add_argument("--judge-max-flips", type=float, default=0.10,
+                    help="above this flip rate the judge's verdicts are reported as unreliable (default 0.10)")
+    mo.add_argument("--rule-floor", type=float, default=0.95, help="flag rules holding less often (default 0.95)")
+    mo.add_argument("--labels-dir", default="evals", help="where review labels and accepted cases go (for the "
+                    "report's instructions; default evals)")
+    mo.add_argument("--link", help="trace link template with {case}, e.g. https://ui/traces/{case}")
+    mo.add_argument("--seed", type=int, default=0)
     switch_cli.add_parsers(sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
@@ -285,6 +355,10 @@ def main(argv: list[str] | None = None) -> int:
         return _grade(args)
     if args.cmd in ("suggest", "suggest-apply"):
         return _suggest(args)
+    if args.cmd == "monitor":
+        return _monitor(args)
+    if args.cmd == "init":
+        return _init(args)
     if args.cmd == "summary":
         res = analysis.summarize(_load_many(args.results, None), args.design, args.cluster_by, args.conf)
         print(json.dumps(res, indent=2, default=str) if args.json else report.summary(res))
