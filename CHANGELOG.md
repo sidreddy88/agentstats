@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Suggestions**
+- `agentstats suggest` / `suggest-apply`: per-agent behaviour rules mined from trajectories with outcome evidence
+  (gate when breaking it is proven to hurt, monitor otherwise), no-answer label advice from repeated template endings,
+  advice for agents with few or no graded runs; accepted rules are written into the agent's config, nothing else is.
+
 ## 0.4.0 (2026-10-30)
 
 **Statistics**
