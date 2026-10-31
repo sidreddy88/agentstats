@@ -198,7 +198,10 @@ an OpenTelemetry export, and writes one report per run, with a section per agent
 - errored runs counted as **infrastructure failures**, and runs with **no usable answer** counted apart;
 - an optional **LLM judge** on a sample, run twice so its flip rate is reported (above 10%, its verdicts are marked
   unreliable), and a **blind review sheet** so a person can check the judge;
-- production failures grouped into **candidate eval cases**, and **suggested rules** for each agent, with evidence.
+- production failures grouped into **candidate eval cases**, and **suggested rules** for each agent, with evidence;
+- **run volume** per agent and source against the window before, flagged when it really fell (an exact test) or went
+  to zero, so a quiet report can't hide traces that stopped arriving; and **cost per usable answer** beside cost per
+  run, so runs that fail are charged to the ones that didn't.
 
 The report holds counts and trace ids only. Raw inputs stay in the output folder for the reviewer.
 

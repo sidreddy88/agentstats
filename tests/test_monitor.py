@@ -217,3 +217,79 @@ def test_cli_monitor_on_an_otlp_export(tmp_path, capsys):
     assert "4 runs: production 4." in (tmp_path / "out" / "report.md").read_text()
     assert cli.main(["monitor", "--config-dir", str(tmp_path / "cfg"), "--otlp", str(tmp_path / "t.json"),
                      "--out", str(tmp_path / "o2"), "--judge"]) == 2
+
+
+# ---- run volume and cost per usable answer ----------------------------------------------------------------------
+
+def test_volume_check_flags_real_drops_and_silence_not_noise():
+    assert monitor.volume_check(0, 20)["flag"]                         # ran before, nothing now: tracing?
+    assert monitor.volume_check(5, 30)["flag"]                         # big, significant drop
+    small = monitor.volume_check(8, 14)                                # under half? no; and not significant
+    assert not small["flag"]
+    assert not monitor.volume_check(2, 6)["flag"]                      # too few runs before to tell
+    assert not monitor.volume_check(40, 30)["flag"]
+    assert monitor.volume_check(10, None) == {"current": 10, "previous": None, "flag": False, "p": None,
+                                              "note": "no previous window"}
+
+
+def test_report_opens_with_run_volume_and_flags_an_agent_that_went_quiet(tmp_path):
+    agents, tools, gens = lf_runs(30)
+
+    def get(params):                                                   # 30 runs in the window before, 2 now
+        flt = json.loads(params["filter"])
+        since = next(f["value"] for f in flt if f["operator"] == ">=")
+        rows = {"AGENT": agents, "TOOL": tools, "GENERATION": gens}[params["type"]]
+        if params["type"] == "AGENT":
+            rows = rows if since < START.isoformat() else rows[:2]
+        return {"data": rows, "meta": {}}
+    report = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                         source=monitor.LangfuseSource(START, END, get=get), start=START, end=END,
+                         log=lambda *_: None)
+    text = report.read_text()
+    assert text.index("## Run volume") < text.index("## SupportAgent")
+    assert "**SupportAgent / production: runs fell 93%" in text and "| SupportAgent / production | 2 | 30 | ⚠️ |" in text
+    assert json.loads((tmp_path / "out" / "volume.json").read_text())["SupportAgent / production"]["flag"] is True
+
+
+def test_eval_traffic_volume_is_shown_but_never_flagged(tmp_path):
+    agents, tools, gens = lf_runs(30)
+    for a in agents:
+        a["environment"] = "eval"
+
+    def get(params):
+        since = next(f["value"] for f in json.loads(params["filter"]) if f["operator"] == ">=")
+        rows = {"AGENT": agents, "TOOL": tools, "GENERATION": gens}[params["type"]]
+        if params["type"] == "AGENT" and since >= START.isoformat():
+            rows = []
+        return {"data": rows, "meta": {}}
+    text = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                       source=monitor.LangfuseSource(START, END, get=get), start=START, end=END,
+                       log=lambda *_: None).read_text()
+    assert "| SupportAgent / eval | 0 | 30 |  |" in text and "No agent's run count fell" in text
+
+
+def test_cost_per_usable_answer_charges_failed_runs_to_the_useful_ones():
+    rows = [{"cost_usd": 1.0}, {"cost_usd": 1.0, "no_answer": "step_limit"}, {"cost_usd": 1.0, "infra_error": "x"},
+            {"cost_usd": 1.0}]
+    assert monitor._cost_per_useful(rows) == 2.0                       # $4 spent, 2 usable answers
+    graded = [{"cost_usd": 1.0, "passed": True}, {"cost_usd": 3.0, "passed": False}]
+    assert monitor._cost_per_useful(graded) == 4.0                     # graded: only passes count as useful
+    assert monitor._cost_per_useful([{"cost_usd": 1.0, "no_answer": "x"}]) == float("inf")
+    assert monitor._cost_per_useful([{}]) is None
+
+
+def test_report_shows_cost_per_usable_answer(tmp_path):
+    report = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                         source=monitor.LangfuseSource(START, END, get=fake_get(*lf_runs())), start=START, end=END,
+                         log=lambda *_: None)
+    # 30 runs at $0.002 (one errored); every non-errored run answered: $0.06 / 29
+    assert "| cost per usable answer |" in report.read_text() and "$0.0021 |" in report.read_text()
+
+
+def test_otlp_previous_window_counts(tmp_path):
+    otlp_export(tmp_path / "t.json")                                   # 4 runs, all inside START..END
+    cfg, ad = {"agent": "SupportAgent"}, monitor.Adapter()
+    assert monitor.OtlpSource([tmp_path / "t.json"], START, END).previous_count(cfg, ad) == {}
+    later = monitor.OtlpSource([tmp_path / "t.json"], END, END + (END - START))
+    assert later.previous_count(cfg, ad) == {"production": 4} and later.traces(cfg) == []
+    assert monitor.OtlpSource([tmp_path / "t.json"]).previous_count(cfg, ad) is None

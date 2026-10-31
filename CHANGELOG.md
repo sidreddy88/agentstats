@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0 (2026-10-31)
+
+**Monitoring**
+- Run volume first in the report: each agent's runs per source against the window just before, flagged when they
+  fell by more than half and a one-sided exact test (the conditional test for two Poisson counts) says the rate
+  really fell, or when an agent with runs went silent. A quiet report is only good news if traces are still arriving.
+  Eval traffic is shown, never flagged. On agent-platform's real traces the first version flagged diagnosis (54 to 6
+  runs); split by source, that was SWE-bench replays finishing, not production, which is why it's per source.
+- Cost per usable answer next to cost per run: all spend divided by runs that passed (graded) or produced an answer
+  without an infrastructure error. Errored runs now keep their cost.
+
 ## 0.7.0 (2026-10-31)
 
 - Two rule kinds: `max_calls` (a tool, or `"*"`, called at most n times per run: over-retrieval) and

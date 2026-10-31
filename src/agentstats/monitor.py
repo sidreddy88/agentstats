@@ -234,6 +234,14 @@ class LangfuseSource:
                                     get=self.get)
         return join_traces(agents, self._tools, self._gens)
 
+    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
+        """Runs of this agent in the window of the same length just before this one, by source. Tool calls aren't
+        fetched for it, so the adapter's source() sees each run's input and environment only."""
+        prev_start = self.start - (self.end - self.start)
+        obs = fetch_observations(cfg.get("observation_type", "AGENT"), prev_start, self.start, name=cfg["agent"],
+                                 get=self.get, fields="core,basic,io")
+        return Counter(adapter.source({"trace_id": o.get("traceId"), "agent": o, "calls": []}) for o in obs)
+
     def agent_names(self, observation_type: str = "AGENT") -> Counter:
         """Agent span name -> runs in the window (for `agentstats init`)."""
         # The name is in the "basic" field group, not "core".
@@ -290,6 +298,9 @@ class OtlpSource:
 
     def __init__(self, paths: list[str | Path], start: dt.datetime | None = None, end: dt.datetime | None = None):
         self.spans: dict[str, list[dict]] = defaultdict(list)
+        self._before: dict[str, list[dict]] = defaultdict(list)     # the window just before, for previous_count
+        self._windowed = bool(start and end)
+        prev_start = start - (end - start) if start and end else None
         for p in paths:
             text = Path(p).read_text()
             try:
@@ -303,6 +314,9 @@ class OtlpSource:
                         for s in ss.get("spans", []):
                             t0 = int(s.get("startTimeUnixNano", 0))
                             if start and t0 and _iso(t0) < start.isoformat():
+                                if prev_start and _iso(t0) >= prev_start.isoformat():
+                                    self._before[s["traceId"]].append({**s, "_a": _attrs(s.get("attributes")),
+                                                                       "_r": res})
                                 continue
                             if end and t0 and _iso(t0) >= end.isoformat():
                                 continue
@@ -347,6 +361,19 @@ class OtlpSource:
             out.update({n for n in (_agent_name(s) for s in spans) if n})
         return out
 
+    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
+        """Runs of this agent in the window just before, by source (None when there's no window: --all-spans)."""
+        if not self._windowed:
+            return None
+        out: Counter = Counter()
+        for spans in self._before.values():
+            agent = next((s for s in spans if _agent_name(s) == cfg["agent"]), None)
+            if agent is not None:
+                env = agent.get("_r", {}).get("deployment.environment.name") or agent.get("_r", {}).get(
+                    "deployment.environment")
+                out[adapter.source({"agent": {"environment": env, "input": None}, "calls": []})] += 1
+        return out
+
     def link(self, traces: list[dict]) -> str:
         return ""
 
@@ -387,9 +414,12 @@ def to_row(trace: dict, cfg: dict, adapter: Adapter) -> dict:
     agent = trace["agent"]
     base_tags = [f"agent:{cfg['key']}", f"source:{adapter.source(trace)}", f"model:{trace.get('model', 'unknown')}"]
     if agent.get("level") == "ERROR":           # the run itself failed: infrastructure, not the agent's judgement
-        return {"arm": cfg["key"], "case": trace["trace_id"], "run": 1, "passed": None,
-                "infra_error": str(agent.get("statusMessage") or "agent run errored")[:200],
-                "tags": base_tags, "checks": {}}
+        row = {"arm": cfg["key"], "case": trace["trace_id"], "run": 1, "passed": None,
+               "infra_error": str(agent.get("statusMessage") or "agent run errored")[:200],
+               "tags": base_tags, "checks": {}}
+        if trace.get("cost_usd"):
+            row["cost_usd"] = round(trace["cost_usd"], 6)      # an errored run still cost money
+        return row
     output = adapter.parse_output(trace)
     calls = [{"name": c["name"], "args": c["input"] if isinstance(c["input"], dict) else {}} for c in trace["calls"]]
     checks: dict[str, bool] = {}
@@ -452,8 +482,22 @@ def summarize_rules(rows: list[dict]) -> dict[str, dict]:
         costs = [r["cost_usd"] for r in groups[key] if r.get("cost_usd")]
         out[key] = {"runs": len(atts), "no_answer": sum(1 for a in atts if a.no_answer),
                     "infra": sum(1 for a in atts if a.infra_error),
-                    "cost_per_run": sum(costs) / len(costs) if costs else None, "checks": res.get("checks", {})}
+                    "cost_per_run": sum(costs) / len(costs) if costs else None,
+                    "cost_per_useful": _cost_per_useful(groups[key]), "checks": res.get("checks", {})}
     return out
+
+
+def _cost_per_useful(rows: list[dict]) -> float | None:
+    """All spend divided by the runs that produced something usable: passed ones when any run is graded, otherwise
+    runs with an answer and no infrastructure error. Runs that fail still cost money; this charges it to the ones
+    that didn't."""
+    spend = sum(r.get("cost_usd") or 0 for r in rows)
+    if not spend:
+        return None
+    graded = [r for r in rows if isinstance(r.get("passed"), bool)]
+    useful = (sum(1 for r in graded if r["passed"]) if graded
+              else sum(1 for r in rows if not r.get("no_answer") and not r.get("infra_error")))
+    return spend / useful if useful else float("inf")
 
 
 def flags(rule_summary: dict[str, dict], floor: float) -> list[str]:
@@ -468,6 +512,32 @@ def flags(rule_summary: dict[str, dict], floor: float) -> list[str]:
             elif iv["estimate"] < floor:
                 out.append(f"{src}: `{rule}` at {_pct(iv['estimate'])} (CI {_pct(iv['low'])} to {_pct(iv['high'])}):"
                            " below the floor but not proven; watch it")
+    return out
+
+
+VOLUME_MIN_PREVIOUS = 10      # below this many runs last window, a drop can't be told from chance
+VOLUME_DROP = 0.5             # flag when this window has under half the previous window's runs ...
+VOLUME_P = 0.01               # ... and an exact test says the rate really fell
+
+
+def volume_check(current: int, previous: int | None) -> dict:
+    """Did an agent's run count fall? Under an unchanged rate, given both windows' total, this window's count is
+    Binomial(total, 1/2); a one-sided exact test (the conditional test for two Poisson counts) says whether the drop
+    is real. An agent that ran before and not at all now is always flagged: tracing may have stopped."""
+    out = {"current": current, "previous": previous, "flag": False, "p": None, "note": ""}
+    if previous is None:
+        out["note"] = "no previous window"
+        return out
+    if previous and current == 0:
+        out.update(flag=True, note="no runs this window after runs in the last one: check that tracing still works")
+        return out
+    if previous >= VOLUME_MIN_PREVIOUS and current < VOLUME_DROP * previous:
+        from scipy.stats import binomtest
+        p = binomtest(current, current + previous, 0.5, alternative="less").pvalue
+        out["p"] = p
+        if p < VOLUME_P:
+            out.update(flag=True, note=f"runs fell {100 * (1 - current / previous):.0f}% (exact test p = {p:.2g}): if "
+                                       "traffic didn't fall, check that tracing still works")
     return out
 
 
@@ -575,11 +645,13 @@ def render_agent(cfg: dict, rows: list[dict], rule_summary: dict, judge_summary:
     fl = flags(rule_summary, floor)
     lines += ["", "**Needs attention**", ""] + ([f"- {f}" for f in fl] or
                                               [f"- Nothing: every behaviour rule is at or above {_pct(floor)}."])
-    lines += ["", "| source / model | runs | errored (infrastructure) | no usable answer | cost per run |",
-              "|---|---|---|---|---|"]
+    lines += ["", "| source / model | runs | errored (infrastructure) | no usable answer | cost per run | "
+              "cost per usable answer |", "|---|---|---|---|---|---|"]
     for key, s in rule_summary.items():
         cpr = f"${s['cost_per_run']:.4f}" if s.get("cost_per_run") else "n/a"
-        lines.append(f"| {key} | {s['runs']} | {s['infra']} | {s['no_answer']} | {cpr} |")
+        cpu = s.get("cost_per_useful")
+        cpu = "n/a" if cpu is None else "no usable answers" if cpu == float("inf") else f"${cpu:.4f}"
+        lines.append(f"| {key} | {s['runs']} | {s['infra']} | {s['no_answer']} | {cpr} | {cpu} |")
     errors = Counter(r["infra_error"] for r in rows if r.get("infra_error"))
     if errors:
         lines += ["", "Errored runs are kept out of the rule rates. Causes: "
@@ -611,6 +683,20 @@ def suggestions(out: Path, config_dir: str | Path) -> str:
             "production runs are ungraded, so new rules here are monitor-only):\n\n```\n" + body.strip() + "\n```\n\n"
             f"To accept some: `agentstats suggest-apply proposal.json --config-dir {config_dir}` (it asks item by "
             "item and writes only the rules you accept).")
+
+
+def render_volume(volume: list[tuple[str, dict]]) -> list[str]:
+    """Run counts per agent vs the window before, first in the report: a quiet report is only good news if the
+    traces are still arriving."""
+    flagged = [(a, v) for a, v in volume if v["flag"]]
+    lines = ["## Run volume", ""]
+    lines += [f"- **{a}: {v['note']}** ({v['current']} vs {v['previous']})" for a, v in flagged] or \
+        ["- No agent's run count fell significantly against the window before (eval runs aren't checked)."]
+    lines += ["", "| agent / source | runs this window | window before | |", "|---|---|---|---|"]
+    for a, v in volume:
+        prev = "n/a" if v["previous"] is None else v["previous"]
+        lines.append(f"| {a} | {v['current']} | {prev} | {'⚠️' if v['flag'] else ''} |")
+    return lines + [""]
 
 
 def render(start, end, sections: list[list[str]], config_dir: str | Path, labels_dir: str) -> str:
@@ -665,16 +751,26 @@ def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, 
     configs = load_configs(config_dir, adapters, agents)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    sections, traj = [], []
+    sections, traj, volume = [], [], []
     for cfg in configs:
         traces = source.traces(cfg)
         log(f"{cfg['agent']}: {len(traces)} runs")
+        adapter = adapters[cfg.get("adapter", "default")]
+        prev = source.previous_count(cfg, adapter) if hasattr(source, "previous_count") else None
+        now = Counter(adapter.source(t) for t in traces)
+        for src in sorted(set(now) | set(prev or {}), key=lambda k: (k != "production", k)) or ["all"]:
+            v = volume_check(now.get(src, 0), None if prev is None else prev.get(src, 0))
+            if src == "eval":                          # eval runs come and go by design: shown, never flagged
+                v.update(flag=False, note="eval runs: not checked")
+            volume.append((f"{cfg['agent']} / {src}", v))
         trace_link = link if link is not None else source.link(traces)
         sections.append(run_agent(cfg, traces, adapters[cfg.get("adapter", "default")], out / cfg["key"],
                                   judge_settings=judge_settings, seed=seed, floor=floor, link=trace_link))
         traj += trajectories(cfg, traces)
     (out / "trajectories.jsonl").write_text("".join(json.dumps(r) + "\n" for r in traj))
     sections.append(["## Suggestions", "", suggestions(out, config_dir), ""])
+    sections.insert(0, render_volume(volume))
+    (out / "volume.json").write_text(json.dumps({a: v for a, v in volume}, indent=1, default=str))
     report = out / "report.md"
     report.write_text(render(start, end, sections, config_dir, labels_dir))
     return report
