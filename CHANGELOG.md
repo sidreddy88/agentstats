@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 (2026-10-31)
+
+- `monitor`: an agent's config can set `review_instructions`, printed at the top of its review sheet. Asked only
+  "did the agent get it right?", GPT-5.5 reviewing 20 triage runs passed all 7 whose stated occurrence count had no
+  lookup behind it; a rubric that asks whether each count appears in the tool results caught all 7. A person reading
+  the same sheet could miss them the same way, so the sheet can now say what to check.
+
 ## 0.8.0 (2026-10-31)
 
 **Monitoring**
