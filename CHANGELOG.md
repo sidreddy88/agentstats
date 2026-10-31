@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `agentstats --help` lists commands in groups by task (set up and monitor, gate and compare, check your
+  graders, grow the eval set, read your data) instead of one flat list.
+
 ## 0.6.0 (2026-10-31)
 
 **Setup**

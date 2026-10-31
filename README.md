@@ -1,7 +1,8 @@
 # agentstats
 
-Evals for agent systems, with the statistics done right. agentstats gates pull requests, checks main every night,
-monitors production from your traces, and turns production failures into new eval cases. Point it at your agent's runs
+Evals for agent systems, with the statistics done right: a statistics core (intervals, paired tests, gates) with
+an eval workflow on top. agentstats gates pull requests, checks main every night, monitors production from your
+traces, and turns production failures into new eval cases. Point it at your agent's runs
 (Harbor jobs, ATIF trajectories, Inspect AI logs, Langfuse or OpenTelemetry traces, or a JSONL file) and it tells you
 how good the agent is, how reliable it is, whether version B is really better than A, and whether a cheaper model is
 shown to be no worse. Every number comes with a confidence interval, and the report says which claim the numbers

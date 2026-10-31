@@ -15,6 +15,29 @@ from agentstats.ci_templates import FILES as CI_FILES
 DESIGN_HELP = ("how the eval set was built: curated (hand-picked, the default), sampled (random from real "
                "traffic), clustered (sampled, in groups that fail together; needs --cluster-by)")
 
+DESCRIPTION = ("Evals for agent systems: a statistics core (intervals, paired tests, gates) with an eval workflow "
+               "on top.")
+
+# `agentstats --help` lists commands by what you're trying to do, not alphabetically. Every command is in one group.
+GROUPS = [
+    ("Set up and monitor", ["init", "monitor", "suggest", "suggest-apply", "init-ci"]),
+    ("Gate and compare", ["gate", "compare", "summary", "size", "sample", "preregister", "switch"]),
+    ("Check your graders", ["grade", "judge", "review"]),
+    ("Grow the eval set", ["promote"]),
+    ("Read your data", ["convert", "convert-traces", "check"]),
+]
+
+
+def grouped_help(ap: argparse.ArgumentParser, sub) -> str:
+    helps = {a.dest: a.help or "" for a in sub._choices_actions}
+    width = max(len(n) for n in helps) + 2
+    lines = [f"usage: {ap.prog} COMMAND [options]   ({ap.prog} COMMAND --help for its options)", "", DESCRIPTION]
+    grouped = {n for _, names in GROUPS for n in names}
+    other = sorted(n for n in helps if n not in grouped)    # never hide a command that wasn't given a group
+    for title, names in GROUPS + ([("Other", other)] if other else []):
+        lines += ["", f"{title}:"] + [f"  {n:<{width}}{helps[n]}" for n in names if n in helps]
+    return "\n".join(lines) + "\n"
+
 
 def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--design", choices=DESIGNS, default="curated", help=DESIGN_HELP)
@@ -181,8 +204,8 @@ def _suggest(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="agentstats", description="Statistics for agent evals.")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    ap = argparse.ArgumentParser(prog="agentstats", description=DESCRIPTION)
+    sub = ap.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
 
     s = sub.add_parser("summary", help="pass rate with the right CI, reliability, efficiency, infra failures")
     s.add_argument("results", nargs="+", help="JSONL file(s) or Harbor job dir(s); several = several runs")
@@ -344,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     mo.add_argument("--link", help="trace link template with {case}, e.g. https://ui/traces/{case}")
     mo.add_argument("--seed", type=int, default=0)
     switch_cli.add_parsers(sub)
+    ap.format_help = lambda: grouped_help(ap, sub)
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
         return switch_cli.run(args)
