@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-31)
 
 **Suggestions**
 - `agentstats suggest` / `suggest-apply`: per-agent behaviour rules mined from trajectories with outcome evidence
