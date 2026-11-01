@@ -17,6 +17,7 @@ Each agent is a config file, <config-dir>/<name>.json:
   observation_type   Langfuse observation type of the agent span (default AGENT)
   rubric, judge_fields, judge_sample, review_n   the rubric judge and the human review sample (optional)
   review_instructions   what a reviewer should check for this agent, printed atop its review sheet (optional)
+  eval_set       path to the agent's eval set; a cheaper-model candidate is only proposed for testing with one
   group_by       tag prefix for candidate eval cases (optional)
 `agentstats suggest-apply` writes this format, so accepted suggestions are monitored the next run.
 
@@ -196,6 +197,17 @@ def fetch_observations(obs_type: str, start: dt.datetime, end: dt.datetime, name
     return rows
 
 
+def _generation_tokens(g: dict) -> tuple[int, int]:
+    """(input, output) tokens of one Langfuse generation, cache and reasoning tokens included: inputUsage /
+    outputUsage when Langfuse reports totals, else the sum of the usageDetails buckets."""
+    if g.get("inputUsage") or g.get("outputUsage"):
+        return int(g.get("inputUsage") or 0), int(g.get("outputUsage") or 0)
+    u = g.get("usageDetails") or {}
+    tin = sum(int(v or 0) for k, v in u.items() if k.startswith("input"))
+    tout = sum(int(v or 0) for k, v in u.items() if k.startswith("output"))
+    return tin, tout
+
+
 def join_traces(agents: list[dict], tools: list[dict], generations: list[dict] | None = None) -> list[dict]:
     """One trace per agent run: the agent observation, its tool calls in start order, and from its LLM calls the
     most used model and the summed cost. Tool and generation rows don't carry the trace name, so they're matched by
@@ -205,16 +217,21 @@ def join_traces(agents: list[dict], tools: list[dict], generations: list[dict] |
         by_trace[t["traceId"]].append(t)
     models: dict[str, Counter] = defaultdict(Counter)
     cost: dict[str, float] = defaultdict(float)
+    tokens: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for g in generations or []:
         if g.get("model"):
             models[g["traceId"]][g["model"]] += 1
         cost[g["traceId"]] += float(g.get("totalCost") or 0)
+        tin, tout = _generation_tokens(g)
+        tokens[g["traceId"]][0] += tin
+        tokens[g["traceId"]][1] += tout
     out = []
     for a in agents:
         calls = sorted(by_trace.get(a["traceId"], []), key=lambda t: t.get("startTime") or "")
         m = models.get(a["traceId"])
+        tin, tout = tokens.get(a["traceId"], (0, 0))
         out.append({"trace_id": a["traceId"], "agent": a, "model": m.most_common(1)[0][0] if m else "unknown",
-                    "cost_usd": cost.get(a["traceId"]),
+                    "cost_usd": cost.get(a["traceId"]), "input_tokens": tin, "output_tokens": tout,
                     "calls": [{"name": t.get("name"), "input": as_json(t.get("input")) or {},
                                "output": str(as_json(t.get("output")) or "")} for t in calls]})
     return out
@@ -335,13 +352,15 @@ class OtlpSource:
                              for s in spans)
             models.pop(None, None)
             cost = sum(float(s["_a"].get("gen_ai.usage.cost") or 0) for s in spans)
+            tin = sum(int(s["_a"].get("gen_ai.usage.input_tokens") or 0) for s in spans)
+            tout = sum(int(s["_a"].get("gen_ai.usage.output_tokens") or 0) for s in spans)
             status = (agent.get("status") or {}).get("code")
             calls = [{"name": s["_a"].get("gen_ai.tool.name") or s.get("name", ""),
                       "input": as_json(s["_a"].get("gen_ai.tool.call.arguments")) or {},
                       "output": str(s["_a"].get("gen_ai.tool.call.result") or "")}
                      for s in spans if s["_a"].get("gen_ai.operation.name") == "execute_tool"]
             out.append({"trace_id": tid, "model": models.most_common(1)[0][0] if models else "unknown",
-                        "cost_usd": cost or None, "calls": calls,
+                        "cost_usd": cost or None, "input_tokens": tin, "output_tokens": tout, "calls": calls,
                         "agent": {"name": cfg["agent"],
                                   "input": a.get("gen_ai.input.messages") or a.get("input.value"),
                                   "output": a.get("gen_ai.output.messages") or a.get("output.value"),
@@ -420,6 +439,8 @@ def to_row(trace: dict, cfg: dict, adapter: Adapter) -> dict:
                "tags": base_tags, "checks": {}}
         if trace.get("cost_usd"):
             row["cost_usd"] = round(trace["cost_usd"], 6)      # an errored run still cost money
+        if trace.get("input_tokens") or trace.get("output_tokens"):  # ... and its tokens price a candidate fairly
+            row["input_tokens"], row["output_tokens"] = trace.get("input_tokens", 0), trace.get("output_tokens", 0)
         return row
     output = adapter.parse_output(trace)
     calls = [{"name": c["name"], "args": c["input"] if isinstance(c["input"], dict) else {}} for c in trace["calls"]]
@@ -438,6 +459,8 @@ def to_row(trace: dict, cfg: dict, adapter: Adapter) -> dict:
            "tags": base_tags + adapter.tags(trace), "checks": checks, "tool_calls": len(calls)}
     if trace.get("cost_usd"):
         row["cost_usd"] = round(trace["cost_usd"], 6)
+    if trace.get("input_tokens") or trace.get("output_tokens"):
+        row["input_tokens"], row["output_tokens"] = trace.get("input_tokens", 0), trace.get("output_tokens", 0)
     if agent.get("latency") is not None:
         row["latency_s"] = float(agent["latency"])
     if isinstance(meta, dict) and meta.get("iterations") is not None:
@@ -703,6 +726,116 @@ def render_volume(volume: list[tuple[str, dict]]) -> list[str]:
     return lines + [""]
 
 
+def load_models(path: str | Path | None) -> dict | None:
+    """Candidate models and their prices: {"prices_per_million": {"model": {"input": usd, "output": usd}}}."""
+    if not path:
+        return None
+    data = json.loads(Path(path).read_text())
+    prices = data.get("prices_per_million")
+    if not isinstance(prices, dict) or not prices:
+        raise ValueError(f'{path}: needs {{"prices_per_million": {{"model": {{"input": usd, "output": usd}}}}}}')
+    for m, pr in prices.items():
+        if not (isinstance(pr, dict) and isinstance(pr.get("input"), (int, float))
+                and isinstance(pr.get("output"), (int, float))):
+            raise ValueError(f"{path}: price for {m!r} needs numeric input and output (USD per million tokens)")
+    return data
+
+
+def _priced(rows: list[dict], price: dict) -> float:
+    return sum((r.get("input_tokens") or 0) * price["input"] + (r.get("output_tokens") or 0) * price["output"]
+               for r in rows) / 1e6
+
+
+def model_inventory(rows_by_agent: dict[str, list[dict]], models: dict | None = None) -> list[dict]:
+    """Spend per agent and model over the window, every source included (eval runs cost money too), ranked by
+    spend. Spend is what the traces recorded; for a model with no recorded cost, its tokens priced from --models."""
+    prices = (models or {}).get("prices_per_million", {})
+    out = []
+    for agent, rows in rows_by_agent.items():
+        by_model: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        for r in rows:
+            by_model[(_tag(r, "model"), _tag(r, "source"))].append(r)
+        for (model, source), rs in by_model.items():
+            spend = sum(r.get("cost_usd") or 0 for r in rs)
+            estimated = False
+            if not spend and model in prices and any(r.get("input_tokens") for r in rs):
+                spend, estimated = _priced(rs, prices[model]), True
+            out.append({"agent": agent, "model": model, "source": source, "runs": len(rs), "spend": spend,
+                        "estimated": estimated,
+                        "per_run": spend / len(rs) if rs else None,
+                        "per_useful": _cost_per_useful([{**r, "cost_usd": spend / len(rs)} for r in rs])
+                        if spend else None,
+                        "tokens": any(r.get("input_tokens") for r in rs), "rows": rs})
+    total = sum(x["spend"] for x in out) or 0
+    for x in out:
+        x["share"] = x["spend"] / total if total else None
+    return sorted(out, key=lambda x: -x["spend"])
+
+
+def downgrade_candidates(inventory: list[dict], models: dict, eval_sets: dict[str, str | None],
+                         top: int = 3) -> list[dict]:
+    """For each agent and model with spend, the listed models that would have cost less on this window's actual
+    tokens: an estimate (a different model uses a different number of tokens), ranked by saving. Eval traffic is
+    left out: switching the model behind an eval replay saves nothing in production."""
+    prices = models["prices_per_million"]
+    out = []
+    for x in inventory:
+        if not x["spend"] or not x["tokens"] or x.get("source") == "eval":
+            continue
+        options = []
+        for cand, price in prices.items():
+            if cand == x["model"]:
+                continue
+            est = _priced(x["rows"], price)
+            if est < x["spend"]:
+                options.append({"agent": x["agent"], "model": x["model"], "source": x.get("source"),
+                                "candidate": cand, "spend": x["spend"],
+                                "estimate": est, "ratio": est / x["spend"], "saving": x["spend"] - est,
+                                "eval_set": eval_sets.get(x["agent"])})
+        out += sorted(options, key=lambda o: -o["saving"])[:top]
+    return sorted(out, key=lambda o: -o["saving"])
+
+
+def _usd(v: float | None) -> str:
+    if v is None:
+        return "n/a"
+    return f"${v:.2f}" if v >= 1 else f"${v:.4f}"
+
+
+def render_models(inventory: list[dict], candidates: list[dict] | None) -> list[str]:
+    lines = ["## Models and spend", ""]
+    if not inventory:
+        return lines + ["No runs.", ""]
+    total = sum(x["spend"] for x in inventory)
+    lines += [f"Recorded spend this window: {_usd(total)}, every source included (eval runs cost money too).", "",
+              "| agent | model | source | runs | spend | cost per run | cost per usable answer | share of spend |",
+              "|---|---|---|---|---|---|---|---|"]
+    for x in inventory:
+        share = "n/a" if x["share"] is None else f"{100 * x['share']:.0f}%"
+        spend = _usd(x["spend"]) + (" (priced from tokens)" if x["estimated"] else "") if x["spend"] else "n/a"
+        cpu = x["per_useful"]
+        cpu = "n/a" if cpu is None else "no usable answers" if cpu == float("inf") else _usd(cpu)
+        per_run = _usd(x["per_run"]) if x["spend"] else "n/a"
+        lines.append(f"| {x['agent']} | {x['model']} | {x['source']} | {x['runs']} | {spend} | {per_run} | {cpu} "
+                     f"| {share} |")
+    if candidates is None:
+        return lines + ["", "Pass `--models models.json` (candidate models and prices) to see cheaper candidates.", ""]
+    lines += ["", "**Cheaper candidates** (estimates: this window's actual tokens at each candidate's prices; eval "
+              "traffic left out)", ""]
+    if not candidates:
+        return lines + ["None of the listed models would have cost less on these runs.", ""]
+    lines += ["| agent | source | now | candidate | would have cost | vs now | saving this window | next step |",
+              "|---|---|---|---|---|---|---|---|"]
+    for c in candidates:
+        step = (f"test it: `agentstats preregister`, then `agentstats switch` on `{c['eval_set']}`" if c["eval_set"]
+                else "no eval set: build one first (`agentstats promote`)")
+        lines.append(f"| {c['agent']} | {c['source']} | {c['model']} | {c['candidate']} | {_usd(c['estimate'])} | "
+                     f"{c['ratio']:.2f}x | {_usd(c['saving'])} | {step} |")
+    return lines + ["", "A smaller model can use more or fewer tokens (reasoning especially) and may be worse: these "
+                        "say where a switch could pay, not that it's safe. Decide with `agentstats switch` on the "
+                        "eval set.", ""]
+
+
 def render(start, end, sections: list[list[str]], config_dir: str | Path, labels_dir: str) -> str:
     lines = [f"# agentstats monitor, {start:%Y-%m-%d} to {end:%Y-%m-%d}", ""]
     for s in sections:
@@ -749,7 +882,7 @@ def run_agent(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, *, jud
 def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, end: dt.datetime,
         adapters: dict[str, Adapter] | None = None, agents: list[str] | None = None,
         judge_settings: JudgeSettings | None = None, seed: int = 0, floor: float = 0.95,
-        labels_dir: str = "evals", link: str | None = None, log=print) -> Path:
+        labels_dir: str = "evals", link: str | None = None, models: dict | None = None, log=print) -> Path:
     """Monitor every configured agent over one window; returns the report path."""
     adapters = adapters or {"default": Adapter()}
     configs = load_configs(config_dir, adapters, agents)
@@ -773,6 +906,16 @@ def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, 
         traj += trajectories(cfg, traces)
     (out / "trajectories.jsonl").write_text("".join(json.dumps(r) + "\n" for r in traj))
     sections.append(["## Suggestions", "", suggestions(out, config_dir), ""])
+    rows_by_agent = {cfg["agent"]: [json.loads(x) for x in (out / cfg["key"] / "rows.jsonl").read_text().splitlines()
+                                    if x.strip()] for cfg in configs}
+    inventory = model_inventory(rows_by_agent, models)
+    candidates = None
+    if models:
+        eval_sets = {cfg["agent"]: cfg.get("eval_set") if cfg.get("eval_set") and Path(cfg["eval_set"]).exists()
+                     else None for cfg in configs}
+        candidates = downgrade_candidates(inventory, models, eval_sets)
+        (out / "candidates_models.json").write_text(json.dumps(candidates, indent=1))
+    sections.insert(0, render_models(inventory, candidates))
     sections.insert(0, render_volume(volume))
     (out / "volume.json").write_text(json.dumps({a: v for a, v in volume}, indent=1, default=str))
     report = out / "report.md"

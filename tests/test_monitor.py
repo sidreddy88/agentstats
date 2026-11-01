@@ -307,3 +307,80 @@ def test_review_instructions_from_the_config_head_the_review_sheet(tmp_path, mon
                 log=lambda *_: None)
     md = (tmp_path / "out" / "support" / "review" / "REVIEW.md").read_text()
     assert md.index("**What to check:** Check every stated count") < md.index("## 1.")
+
+
+# ---- models and spend --------------------------------------------------------------------------------------------
+
+def test_generation_tokens_use_totals_or_sum_the_buckets():
+    assert monitor._generation_tokens({"inputUsage": 1883, "outputUsage": 559}) == (1883, 559)
+    assert monitor._generation_tokens({"usageDetails": {"input": 4, "input_cached_tokens": 1655, "output": 282,
+                                                        "output_reasoning_tokens": 277}}) == (1659, 559)
+    assert monitor._generation_tokens({}) == (0, 0)
+
+
+def priced_runs():
+    """SupportAgent on big-model: 30 runs, each 10,000 input + 1,000 output tokens at $0.05 recorded."""
+    agents, tools, _ = lf_runs(30)
+    gens = [{"traceId": a["traceId"], "model": "big-model", "totalCost": 0.05, "inputUsage": 10_000,
+             "outputUsage": 1_000} for a in agents]
+    return agents, tools, gens
+
+
+MODELS = {"prices_per_million": {"big-model": {"input": 3.0, "output": 15.0},
+                                 "small-model": {"input": 0.3, "output": 1.5},
+                                 "pricier-model": {"input": 10.0, "output": 50.0}}}
+
+
+def test_inventory_and_candidates_reprice_actual_tokens(tmp_path):
+    (tmp_path / "evals.jsonl").write_text("{}\n")
+    cfg_dir = write_configs(tmp_path / "cfg", eval_set=str(tmp_path / "evals.jsonl"))
+    src = monitor.LangfuseSource(START, END, get=fake_get(*priced_runs()))
+    report = monitor.run(cfg_dir, tmp_path / "out", source=src, start=START, end=END, models=MODELS,
+                         log=lambda *_: None)
+    text = report.read_text()
+    assert text.index("## Models and spend") < text.index("## SupportAgent")
+    assert "| SupportAgent | big-model | production | 30 | $1.50 | $0.0500 |" in text and "| 100% |" in text
+    # small-model on the same tokens: 30 x (10,000 x 0.3 + 1,000 x 1.5) / 1e6 = $0.135; pricier-model isn't listed
+    cands = json.loads((tmp_path / "out" / "candidates_models.json").read_text())
+    assert [c["candidate"] for c in cands] == ["small-model"]
+    assert cands[0]["estimate"] == pytest.approx(0.135) and cands[0]["saving"] == pytest.approx(1.365)
+    assert "test it: `agentstats preregister`" in text
+
+
+def test_a_candidate_without_an_eval_set_says_build_one_first(tmp_path):
+    report = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                         source=monitor.LangfuseSource(START, END, get=fake_get(*priced_runs())), start=START, end=END,
+                         models=MODELS, log=lambda *_: None)
+    assert "no eval set: build one first" in report.read_text()
+
+
+def test_without_a_models_file_the_inventory_still_shows(tmp_path):
+    report = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                         source=monitor.LangfuseSource(START, END, get=fake_get(*priced_runs())), start=START, end=END,
+                         log=lambda *_: None)
+    text = report.read_text()
+    assert "## Models and spend" in text and "Pass `--models models.json`" in text
+
+
+def test_unrecorded_cost_is_priced_from_tokens_when_the_model_is_listed():
+    rows = [{"tags": ["model:small-model"], "input_tokens": 1_000_000, "output_tokens": 0}]
+    inv = monitor.model_inventory({"A": rows}, MODELS)
+    assert inv[0]["spend"] == pytest.approx(0.3) and inv[0]["estimated"]
+
+
+def test_models_file_is_validated(tmp_path):
+    bad = tmp_path / "m.json"
+    bad.write_text(json.dumps({"prices_per_million": {"x": {"input": "cheap"}}}))
+    with pytest.raises(ValueError, match="numeric input and output"):
+        monitor.load_models(bad)
+    bad.write_text("{}")
+    with pytest.raises(ValueError, match="prices_per_million"):
+        monitor.load_models(bad)
+
+
+def test_eval_traffic_is_inventoried_but_never_a_switch_candidate():
+    rows = [{"tags": ["model:big-model", "source:eval"], "cost_usd": 1.0, "input_tokens": 10_000,
+             "output_tokens": 1_000}]
+    inv = monitor.model_inventory({"A": rows}, MODELS)
+    assert inv[0]["source"] == "eval" and inv[0]["spend"] == 1.0
+    assert monitor.downgrade_candidates(inv, MODELS, {"A": None}) == []

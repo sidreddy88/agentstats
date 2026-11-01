@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 (2026-11-01)
+
+**Models and spend**
+- `monitor` opens with spend per agent, model and source (every source counted: eval runs cost money too), with cost
+  per run and per usable answer. Runs now record input and output tokens (Langfuse usage, or OTel `gen_ai.usage.*`);
+  errored runs keep theirs.
+- `--models models.json` (candidate models and their prices per million tokens): for each agent's non-eval traffic,
+  the listed models that would have cost less on the window's actual tokens, ranked by saving. With an `eval_set` in
+  the agent's config the next step is `preregister` + `switch` on it; without one, build an eval set first. These are
+  estimates of where a switch could pay, not proof it's safe. On agent-platform's real week the estimate for
+  Haiku 4.5 to 5.5 was 0.10x; the measured switch had been about 11x cheaper per correct answer.
+
 ## 0.9.0 (2026-10-31)
 
 - `monitor`: an agent's config can set `review_instructions`, printed at the top of its review sheet. Asked only
