@@ -387,7 +387,9 @@ list of `{"name", "question", "pass": "yes"|"no"}`, and an item passes when ever
 Any OpenAI-compatible endpoint, called with the standard library. A reply that isn't the JSON asked for is recorded
 as `na`, never a silent pass; transport errors are retried, then recorded as infrastructure errors. Repeats are judge
 labels (for `agentstats judge`'s flip rate), never extra attempts; `--rows` writes one attempt row per item with the
-per-question majority as checks, so a rubric question can be gated like a behaviour rule.
+per-question majority as checks, so a rubric question can be gated like a behaviour rule. Each answer carries a one-sentence reason; a question marked
+`"conditional": true` may be answered n/a when its condition doesn't hold; and every verdict records the judge
+version (model, rubric hash, prompt format), with a warning when results from different judge versions are mixed.
 
 **Sampled human review** (`agentstats review sample ROWS --n 40 --stratify-by intent --link URL --out DIR`, then
 `agentstats review import DIR/review.csv --key DIR/key.jsonl --rater NAME --out labels.jsonl`): picks graded attempts

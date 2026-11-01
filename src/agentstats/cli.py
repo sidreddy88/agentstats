@@ -67,6 +67,7 @@ def _review(args) -> int:
         sheet_path, key_path = review.write(args.out, sheet, key, summary)
         print(f"wrote {sheet_path} ({len(sheet)} items: {summary['sampled']}) and {key_path}. "
               "Give the reviewer only review.csv.")
+        print(review.precision_note(len(sheet)))
         return 0
     labels, report = review.import_labels(args.sheet, args.key, rater=args.rater)
     out = Path(args.out)
@@ -112,10 +113,14 @@ def _grade(args, chat=None) -> int:
         chat = judge_run.http_chat(args.base_url, args.model, key,
                                    temperature=None if args.temperature < 0 else args.temperature)
     fields = [f.strip() for f in args.fields.split(",")] if args.fields else None
+    version = judge_run.judge_version(args.model, rubric)
     labels, rows, counts = judge_run.run(items, rubric, chat, repeats=args.repeats, workers=args.workers,
-                                         fields=fields)
+                                         fields=fields, version=version)
+    print(f"judge version: {version}")
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)       # don't lose paid judge calls to a missing folder
     Path(args.out).write_text("".join(json.dumps(r) + "\n" for r in labels))
     if args.rows:
+        Path(args.rows).parent.mkdir(parents=True, exist_ok=True)
         Path(args.rows).write_text("".join(json.dumps(r) + "\n" for r in rows))
     print(f"{counts['calls']} judge calls: {counts['judged']} judged, {counts['unparsed']} unparsed replies, "
           f"{counts['errors']} errors. Wrote {args.out}" + (f" and {args.rows}" if args.rows else "") + ".")
@@ -396,6 +401,10 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "judge":
         res = judge.analyze(judge.load(args.labels))
         print(json.dumps(res, indent=2, default=str) if args.json else report.judge(res))
+        versions = sorted({r.get("judge") for r in judge.load(args.labels) if r.get("rater") == "judge"} - {None})
+        if len(versions) > 1:
+            print(f"WARNING: these labels come from {len(versions)} judge versions ({', '.join(versions)}): its "
+                  "consistency and agreement mix different judges; compare one version at a time.")
     elif args.cmd == "check":
         rules = checks.load_rules(args.rules)
         out = []

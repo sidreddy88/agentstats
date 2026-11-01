@@ -73,6 +73,20 @@ def _allocate(sizes: dict[str, int], n: int) -> dict[str, int]:
     return alloc
 
 
+def precision_note(n: int, agreement: float = 0.85) -> str:
+    """What a review of n items can tell you: the 95% interval half-width on the judge's agreement with the
+    reviewer, at a typical agreement rate (normal approximation, before reweighting). The sample sizes needed for
+    +-10 and +-5 points are given so the reviewer can pick."""
+    import math
+    def half(k):
+        return 1.96 * math.sqrt(agreement * (1 - agreement) / k)
+    def need(width):
+        return math.ceil((1.96 / width) ** 2 * agreement * (1 - agreement))
+    return (f"With {n} reviewed items, the judge's agreement with the reviewer is known to about +-{100 * half(n):.0f} "
+            f"points (95%, if it agrees ~{100 * agreement:.0f}% of the time); +-10 points needs {need(0.10)} items, "
+            f"+-5 needs {need(0.05)}.")
+
+
 def sample(attempts: list[Attempt], n: int, *, stratify_by: str | None = None, seed: int = 0,
            link: str | None = None) -> tuple[list[dict], list[dict], dict]:
     """(sheet rows, key rows, summary). The sheet is blind; the key holds verdicts, strata and weights."""
