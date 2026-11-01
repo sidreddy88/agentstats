@@ -168,7 +168,8 @@ def _monitor(args) -> int:
     report = monitor.run(args.config_dir, args.out, source=source, start=start, end=end,
                          adapters=monitor.load_adapters(args.adapters),
                          agents=args.agents.split(",") if args.agents else None, judge_settings=settings,
-                         seed=args.seed, floor=args.rule_floor, labels_dir=args.labels_dir, link=args.link)
+                         seed=args.seed, floor=args.rule_floor, labels_dir=args.labels_dir, link=args.link,
+                         models=monitor.load_models(args.models))
     print(f"wrote {report}")
     return 0
 
@@ -365,6 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     mo.add_argument("--labels-dir", default="evals", help="where review labels and accepted cases go (for the "
                     "report's instructions; default evals)")
     mo.add_argument("--link", help="trace link template with {case}, e.g. https://ui/traces/{case}")
+    mo.add_argument("--models", help='candidate models and prices for the spend section: {"prices_per_million": '
+                    '{"model": {"input": usd, "output": usd}}}')
     mo.add_argument("--seed", type=int, default=0)
     switch_cli.add_parsers(sub)
     ap.format_help = lambda: grouped_help(ap, sub)

@@ -201,7 +201,11 @@ an OpenTelemetry export, and writes one report per run, with a section per agent
 - production failures grouped into **candidate eval cases**, and **suggested rules** for each agent, with evidence;
 - **run volume** per agent and source against the window before, flagged when it really fell (an exact test) or went
   to zero, so a quiet report can't hide traces that stopped arriving; and **cost per usable answer** beside cost per
-  run, so runs that fail are charged to the ones that didn't.
+  run, so runs that fail are charged to the ones that didn't;
+- **models and spend** per agent, model and source, and with `--models models.json` (candidate models and prices),
+  the cheaper models that would have cost less on the window's actual tokens, each with its next step: test it with
+  `preregister` and `switch` on the agent's `eval_set`, or build an eval set first. An estimate of where a smaller
+  model could pay, not proof that it's safe.
 
 The report holds counts and trace ids only. Raw inputs stay in the output folder for the reviewer.
 
