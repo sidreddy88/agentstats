@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0 (2026-11-01)
+
+**Monitoring**
+- Tool calls per run, against the window before, in the run-volume table: flagged when the mean rose by 25% or more
+  and a one-sided rank test (Mann-Whitney) says the rise is real. A rising count is an early sign of an agent working
+  around a degraded tool, a worse model or a prompt change, before outcomes show it. Eval traffic is shown, not
+  flagged. Inspired by agentsre's Tool Invocation Efficiency SLI, with a test instead of a fixed threshold.
+- Model retirements: `--models` accepts `"retirements": {"model": "YYYY-MM-DD"}`; the spend section warns when a model
+  still running in non-eval traffic is retired or retires within 60 days. A retired dated snapshot once silently
+  broke an agent-platform agent for months.
+
 ## 0.10.0 (2026-11-01)
 
 **Models and spend**

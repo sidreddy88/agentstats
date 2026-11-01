@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import threading
 
 import pytest
@@ -247,7 +248,8 @@ def test_report_opens_with_run_volume_and_flags_an_agent_that_went_quiet(tmp_pat
                          log=lambda *_: None)
     text = report.read_text()
     assert text.index("## Run volume") < text.index("## SupportAgent")
-    assert "**SupportAgent / production: runs fell 93%" in text and "| SupportAgent / production | 2 | 30 | ⚠️ |" in text
+    assert "**SupportAgent / production: runs fell 93%" in text
+    assert re.search(r"\| SupportAgent / production \| 2 \| 30 \| [\d.]+ \| [\d.]+ \| ⚠️ \|", text)
     assert json.loads((tmp_path / "out" / "volume.json").read_text())["SupportAgent / production"]["flag"] is True
 
 
@@ -265,7 +267,8 @@ def test_eval_traffic_volume_is_shown_but_never_flagged(tmp_path):
     text = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
                        source=monitor.LangfuseSource(START, END, get=get), start=START, end=END,
                        log=lambda *_: None).read_text()
-    assert "| SupportAgent / eval | 0 | 30 |  |" in text and "No agent's run count fell" in text
+    assert re.search(r"\| SupportAgent / eval \| 0 \| 30 \| n/a \| [\d.]+ \|  \|", text)
+    assert "No agent's run count fell" in text
 
 
 def test_cost_per_usable_answer_charges_failed_runs_to_the_useful_ones():
@@ -384,3 +387,66 @@ def test_eval_traffic_is_inventoried_but_never_a_switch_candidate():
     inv = monitor.model_inventory({"A": rows}, MODELS)
     assert inv[0]["source"] == "eval" and inv[0]["spend"] == 1.0
     assert monitor.downgrade_candidates(inv, MODELS, {"A": None}) == []
+
+
+
+# ---- tool calls per run vs the window before ------------------------------------------------------------------------
+
+def test_tool_call_check_flags_a_real_rise_not_noise_or_small_samples():
+    before = [2, 2, 3, 2, 2, 3, 2, 2, 2, 3, 2, 2]
+    rose = monitor.tool_call_check([6, 7, 6, 5, 7, 6, 6, 7, 5, 6, 6, 7], before)
+    assert rose["flag"] and "rose from 2.2 to 6.2" in rose["note"]
+    assert not monitor.tool_call_check([2, 3, 2, 2, 3, 2, 2, 3, 2, 2, 2, 3], before)["flag"]   # same distribution
+    assert not monitor.tool_call_check([9, 9, 9], before)["flag"]                              # too few runs now
+    assert not monitor.tool_call_check([6] * 12, None)["flag"]                                 # no window before
+    fell = monitor.tool_call_check([1] * 12, before)
+    assert not fell["flag"] and fell["now"] == 1.0                                             # fewer calls: fine
+
+
+def test_report_flags_tool_calls_per_run_rising(tmp_path):
+    agents, tools, gens = lf_runs(30)
+    extra = [{"traceId": a["traceId"], "name": "get_order", "startTime": "3", "input": "{}", "output": "x"}
+             for a in agents for _ in range(4)]                  # this window: 4 more calls per run
+
+    def get(params):
+        since = next(f["value"] for f in json.loads(params["filter"]) if f["operator"] == ">=")
+        current = since >= START.isoformat()
+        rows = {"AGENT": agents, "TOOL": tools + (extra if current else []), "GENERATION": gens}[params["type"]]
+        return {"data": rows, "meta": {}}
+    text = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                       source=monitor.LangfuseSource(START, END, get=get), start=START, end=END,
+                       log=lambda *_: None).read_text()
+    assert "**SupportAgent / production: tool calls per run rose from 1.8 to 5.8" in text
+
+
+
+# ---- model retirements ------------------------------------------------------------------------------------------
+
+def test_retirement_warnings_for_models_still_in_use():
+    inv = [{"agent": "A", "model": "old-model", "source": "production", "runs": 12},
+           {"agent": "A", "model": "soon-model", "source": "production", "runs": 5},
+           {"agent": "B", "model": "later-model", "source": "production", "runs": 9},
+           {"agent": "B", "model": "fine-model", "source": "eval", "runs": 3}]
+    models = {"prices_per_million": {}, "retirements": {"old-model": "2026-09-30", "soon-model": "2026-11-20",
+                                                        "later-model": "2027-06-01", "fine-model": "2026-10-01"}}
+    w = monitor.retirement_warnings(inv, models, dt.date(2026, 11, 1))
+    assert len(w) == 2                                    # fine-model is eval traffic, later-model is far off
+    assert "old-model retired on 2026-09-30" in w[0] and "A (production, 12 runs)" in w[0]
+    assert "soon-model retires in 19 days" in w[1]
+    assert monitor.retirement_warnings(inv, None, dt.date(2026, 11, 1)) == []
+
+
+def test_retirement_dates_are_validated(tmp_path):
+    f = tmp_path / "m.json"
+    f.write_text(json.dumps({"prices_per_million": {"x": {"input": 1, "output": 2}}, "retirements": {"x": "soon"}}))
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        monitor.load_models(f)
+
+
+def test_retirement_warning_heads_the_models_section(tmp_path):
+    models = {**MODELS, "retirements": {"big-model": (START + dt.timedelta(days=20)).date().isoformat()}}
+    text = monitor.run(write_configs(tmp_path / "cfg"), tmp_path / "out",
+                       source=monitor.LangfuseSource(START, END, get=fake_get(*priced_runs())), start=START, end=END,
+                       models=models, log=lambda *_: None).read_text()
+    models_section = text[text.index("## Models and spend"):]
+    assert models_section.index("big-model retires in 13 days") < models_section.index("| agent | model |")

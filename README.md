@@ -205,7 +205,9 @@ an OpenTelemetry export, and writes one report per run, with a section per agent
 - **models and spend** per agent, model and source, and with `--models models.json` (candidate models and prices),
   the cheaper models that would have cost less on the window's actual tokens, each with its next step: test it with
   `preregister` and `switch` on the agent's `eval_set`, or build an eval set first. An estimate of where a smaller
-  model could pay, not proof that it's safe.
+  model could pay, not proof that it's safe;
+- **tool calls per run** against the window before (a rank test flags a real rise), and **model retirements**: with
+  `"retirements"` in the models file, a warning when a model still in use is retired or retires within 60 days.
 
 The report holds counts and trace ids only. Raw inputs stay in the output folder for the reviewer.
 

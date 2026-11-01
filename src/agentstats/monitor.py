@@ -252,13 +252,27 @@ class LangfuseSource:
                                     get=self.get)
         return join_traces(agents, self._tools, self._gens)
 
-    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
-        """Runs of this agent in the window of the same length just before this one, by source. Tool calls aren't
-        fetched for it, so the adapter's source() sees each run's input and environment only."""
+    def previous(self, cfg: dict, adapter: Adapter) -> dict | None:
+        """This agent's runs in the window of the same length just before this one: count and tool calls per run, by
+        source. The adapter's source() sees each run's input and environment (not its tool calls)."""
         prev_start = self.start - (self.end - self.start)
+        if getattr(self, "_prev_tools", None) is None:
+            self._prev_tools = Counter(t.get("traceId") for t in fetch_observations(
+                "TOOL", prev_start, self.start, get=self.get, fields="core"))
         obs = fetch_observations(cfg.get("observation_type", "AGENT"), prev_start, self.start, name=cfg["agent"],
                                  get=self.get, fields="core,basic,io")
-        return Counter(adapter.source({"trace_id": o.get("traceId"), "agent": o, "calls": []}) for o in obs)
+        count: Counter = Counter()
+        tool_calls: dict[str, list[int]] = defaultdict(list)
+        for o in obs:
+            src = adapter.source({"trace_id": o.get("traceId"), "agent": o, "calls": []})
+            count[src] += 1
+            if o.get("level") != "ERROR":
+                tool_calls[src].append(self._prev_tools.get(o.get("traceId"), 0))
+        return {"count": count, "tool_calls": dict(tool_calls)}
+
+    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
+        prev = self.previous(cfg, adapter)
+        return None if prev is None else prev["count"]
 
     def agent_names(self, observation_type: str = "AGENT") -> Counter:
         """Agent span name -> runs in the window (for `agentstats init`)."""
@@ -381,18 +395,28 @@ class OtlpSource:
             out.update({n for n in (_agent_name(s) for s in spans) if n})
         return out
 
-    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
-        """Runs of this agent in the window just before, by source (None when there's no window: --all-spans)."""
+    def previous(self, cfg: dict, adapter: Adapter) -> dict | None:
+        """Runs of this agent in the window just before: count and tool calls per run, by source (None when there's
+        no window: --all-spans)."""
         if not self._windowed:
             return None
-        out: Counter = Counter()
+        count: Counter = Counter()
+        tool_calls: dict[str, list[int]] = defaultdict(list)
         for spans in self._before.values():
             agent = next((s for s in spans if _agent_name(s) == cfg["agent"]), None)
             if agent is not None:
                 env = agent.get("_r", {}).get("deployment.environment.name") or agent.get("_r", {}).get(
                     "deployment.environment")
-                out[adapter.source({"agent": {"environment": env, "input": None}, "calls": []})] += 1
-        return out
+                src = adapter.source({"agent": {"environment": env, "input": None}, "calls": []})
+                count[src] += 1
+                if (agent.get("status") or {}).get("code") not in (2, "STATUS_CODE_ERROR"):
+                    tool_calls[src].append(sum(1 for s in spans
+                                               if s["_a"].get("gen_ai.operation.name") == "execute_tool"))
+        return {"count": count, "tool_calls": dict(tool_calls)}
+
+    def previous_count(self, cfg: dict, adapter: Adapter) -> Counter | None:
+        prev = self.previous(cfg, adapter)
+        return None if prev is None else prev["count"]
 
     def link(self, traces: list[dict]) -> str:
         return ""
@@ -565,6 +589,30 @@ def volume_check(current: int, previous: int | None) -> dict:
     return out
 
 
+TOOL_DRIFT_MIN_RUNS = 10       # runs needed in each window to compare tool calls per run
+TOOL_DRIFT_RISE = 1.25         # flag when the mean rose by at least this factor ...
+TOOL_DRIFT_P = 0.01            # ... and a one-sided rank test says the rise is real
+
+
+def tool_call_check(now: list[int], before: list[int] | None) -> dict:
+    """Tool calls per run, this window vs the one before. A rising count is an early sign of an agent working around
+    a degraded tool, a worse model, or a prompt change: it shows before outcomes do. Mann-Whitney U, one-sided."""
+    def mean(xs):
+        return sum(xs) / len(xs) if xs else None
+    out = {"now": mean(now), "before": mean(before or []), "runs_now": len(now),
+           "runs_before": len(before or []), "flag": False, "p": None, "note": ""}
+    if (before is None or len(now) < TOOL_DRIFT_MIN_RUNS or len(before) < TOOL_DRIFT_MIN_RUNS
+            or not out["before"] or out["now"] < TOOL_DRIFT_RISE * out["before"]):
+        return out
+    from scipy.stats import mannwhitneyu
+    p = float(mannwhitneyu(now, before, alternative="greater").pvalue)
+    out["p"] = p
+    if p < TOOL_DRIFT_P:
+        out.update(flag=True, note=f"tool calls per run rose from {out['before']:.1f} to {out['now']:.1f} "
+                                   f"(rank test p = {p:.2g}): a tool, the model or the prompt may have changed")
+    return out
+
+
 def _cli(*args: str) -> str:
     """Run another agentstats command in-process and return what it printed."""
     from agentstats import cli
@@ -716,18 +764,29 @@ def render_volume(volume: list[tuple[str, dict]]) -> list[str]:
     """Run counts per agent vs the window before, first in the report: a quiet report is only good news if the
     traces are still arriving."""
     flagged = [(a, v) for a, v in volume if v["flag"]]
+    tool_flags = [(a, v["tool_calls"]) for a, v in volume if (v.get("tool_calls") or {}).get("flag")]
     lines = ["## Run volume", ""]
-    lines += [f"- **{a}: {v['note']}** ({v['current']} vs {v['previous']})" for a, v in flagged] or \
-        ["- No agent's run count fell significantly against the window before (eval runs aren't checked)."]
-    lines += ["", "| agent / source | runs this window | window before | |", "|---|---|---|---|"]
+    lines += [f"- **{a}: {v['note']}** ({v['current']} vs {v['previous']})" for a, v in flagged]
+    lines += [f"- **{a}: {tc['note']}**" for a, tc in tool_flags]
+    if not flagged and not tool_flags:
+        lines.append("- No agent's run count fell, or its tool calls per run rose, significantly against the window "
+                     "before (eval runs aren't checked).")
+
+    def calls(x):
+        return "n/a" if x is None else f"{x:.1f}"
+    lines += ["", "| agent / source | runs this window | window before | tool calls per run | window before | |",
+              "|---|---|---|---|---|---|"]
     for a, v in volume:
         prev = "n/a" if v["previous"] is None else v["previous"]
-        lines.append(f"| {a} | {v['current']} | {prev} | {'⚠️' if v['flag'] else ''} |")
+        tc = v.get("tool_calls") or {}
+        warn = "⚠️" if v["flag"] or tc.get("flag") else ""
+        lines.append(f"| {a} | {v['current']} | {prev} | {calls(tc.get('now'))} | {calls(tc.get('before'))} | {warn} |")
     return lines + [""]
 
 
 def load_models(path: str | Path | None) -> dict | None:
-    """Candidate models and their prices: {"prices_per_million": {"model": {"input": usd, "output": usd}}}."""
+    """Candidate models and their prices, and optionally when models retire:
+    {"prices_per_million": {"model": {"input": usd, "output": usd}}, "retirements": {"model": "YYYY-MM-DD"}}."""
     if not path:
         return None
     data = json.loads(Path(path).read_text())
@@ -738,6 +797,11 @@ def load_models(path: str | Path | None) -> dict | None:
         if not (isinstance(pr, dict) and isinstance(pr.get("input"), (int, float))
                 and isinstance(pr.get("output"), (int, float))):
             raise ValueError(f"{path}: price for {m!r} needs numeric input and output (USD per million tokens)")
+    for m, d in (data.get("retirements") or {}).items():
+        try:
+            dt.date.fromisoformat(str(d))
+        except ValueError:
+            raise ValueError(f"{path}: retirement date for {m!r} must be YYYY-MM-DD, got {d!r}") from None
     return data
 
 
@@ -802,8 +866,32 @@ def _usd(v: float | None) -> str:
     return f"${v:.2f}" if v >= 1 else f"${v:.4f}"
 
 
-def render_models(inventory: list[dict], candidates: list[dict] | None) -> list[str]:
+RETIREMENT_WARN_DAYS = 60     # warn this long before a model in use retires (providers give notice; act in time)
+
+
+def retirement_warnings(inventory: list[dict], models: dict | None, today: dt.date) -> list[str]:
+    """Models still running that are retired or retire soon. A retired model can fail every call, or keep answering
+    from an alias that now points elsewhere: either way the agent changes with no deploy of yours."""
+    dates = {m: dt.date.fromisoformat(str(d)) for m, d in ((models or {}).get("retirements") or {}).items()}
+    out = []
+    for x in inventory:
+        when = dates.get(x["model"])
+        if when is None or x.get("source") == "eval":    # eval replays can pin any model on purpose
+            continue
+        days = (when - today).days
+        where = f"{x['agent']} ({x['source']}, {x['runs']} runs)"
+        if days < 0:
+            out.append(f"**{x['model']} retired on {when} and {where} still ran it this window**")
+        elif days <= RETIREMENT_WARN_DAYS:
+            out.append(f"**{x['model']} retires in {days} days ({when}): {where} still runs it; switch before then**")
+    return out
+
+
+def render_models(inventory: list[dict], candidates: list[dict] | None,
+                  retirements: list[str] | None = None) -> list[str]:
     lines = ["## Models and spend", ""]
+    if retirements:
+        lines += [f"- {w}" for w in retirements] + [""]
     if not inventory:
         return lines + ["No runs.", ""]
     total = sum(x["spend"] for x in inventory)
@@ -893,12 +981,21 @@ def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, 
         traces = source.traces(cfg)
         log(f"{cfg['agent']}: {len(traces)} runs")
         adapter = adapters[cfg.get("adapter", "default")]
-        prev = source.previous_count(cfg, adapter) if hasattr(source, "previous_count") else None
+        prev_full = source.previous(cfg, adapter) if hasattr(source, "previous") else None
+        prev = None if prev_full is None else prev_full["count"]
         now = Counter(adapter.source(t) for t in traces)
+        calls_now: dict[str, list[int]] = defaultdict(list)
+        for t in traces:
+            if t["agent"].get("level") != "ERROR":
+                calls_now[adapter.source(t)].append(len(t["calls"]))
         for src in sorted(set(now) | set(prev or {}), key=lambda k: (k != "production", k)) or ["all"]:
             v = volume_check(now.get(src, 0), None if prev is None else prev.get(src, 0))
+            tc = tool_call_check(calls_now.get(src, []),
+                                 None if prev_full is None else prev_full["tool_calls"].get(src, []))
             if src == "eval":                          # eval runs come and go by design: shown, never flagged
                 v.update(flag=False, note="eval runs: not checked")
+                tc.update(flag=False)
+            v["tool_calls"] = tc
             volume.append((f"{cfg['agent']} / {src}", v))
         trace_link = link if link is not None else source.link(traces)
         sections.append(run_agent(cfg, traces, adapters[cfg.get("adapter", "default")], out / cfg["key"],
@@ -915,7 +1012,7 @@ def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, 
                      else None for cfg in configs}
         candidates = downgrade_candidates(inventory, models, eval_sets)
         (out / "candidates_models.json").write_text(json.dumps(candidates, indent=1))
-    sections.insert(0, render_models(inventory, candidates))
+    sections.insert(0, render_models(inventory, candidates, retirement_warnings(inventory, models, end.date())))
     sections.insert(0, render_volume(volume))
     (out / "volume.json").write_text(json.dumps({a: v for a, v in volume}, indent=1, default=str))
     report = out / "report.md"
