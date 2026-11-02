@@ -123,3 +123,9 @@ def test_cli_sample_then_import(tmp_path):
                      "--rater", "bob", "--out", str(labels)]) == 0
     assert cli.main(["judge", str(labels)]) == 0
     assert len(labels.read_text().splitlines()) == 24              # one human + one judge row per item
+
+
+
+def test_precision_note_says_what_a_sample_size_buys():
+    note = review.precision_note(20)
+    assert "With 20 reviewed items" in note and "+-16 points" in note and "+-10 points needs 49" in note

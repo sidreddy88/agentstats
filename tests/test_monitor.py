@@ -174,6 +174,7 @@ def test_full_run_writes_a_report_with_flags_judge_review_candidates_and_suggest
     assert "`looked_up_order` holds only" in text                  # 24 of 29: proven below 95%
     assert "rate limited (1)" in text
     assert "10 of 10 sampled runs judged" in text and "flip rate over 2 repeats: 0.0%" in text
+    assert "Judge version: `m|rubric:" in text
     assert "## Suggestions" in text and "app/evals/<agent>_cases.jsonl" in text
     assert "where is order" not in text                             # raw input stays out of the report
     out = tmp_path / "out" / "support"
@@ -450,3 +451,20 @@ def test_retirement_warning_heads_the_models_section(tmp_path):
                        models=models, log=lambda *_: None).read_text()
     models_section = text[text.index("## Models and spend"):]
     assert models_section.index("big-model retires in 13 days") < models_section.index("| agent | model |")
+
+
+
+def test_review_key_gets_the_judges_reasons(tmp_path, monkeypatch):
+    rubric = tmp_path / "rubric.json"
+    rubric.write_text(json.dumps([{"name": "action_fits_request", "question": "Does the action fit?", "pass": "yes"}]))
+    cfg_dir = write_configs(tmp_path / "cfg", rubric=str(rubric), review_n=4)
+    monkeypatch.setenv("FAKE_KEY", "x")
+    reply = '{"action_fits_request": {"answer": "yes", "reason": "refund matches the request"}}'
+    monkeypatch.setattr(judge_run, "http_chat", lambda *a, **k: (lambda messages: reply))
+    monitor.run(cfg_dir, tmp_path / "out", source=monitor.LangfuseSource(START, END, get=fake_get(*lf_runs())),
+                start=START, end=END, judge_settings=monitor.JudgeSettings("m", key_env="FAKE_KEY"),
+                log=lambda *_: None)
+    key = [json.loads(x) for x in (tmp_path / "out/support/review/key.jsonl").read_text().splitlines()]
+    assert key and all(k["judge_reasons"] == {"action_fits_request": "refund matches the request"} for k in key)
+    sheet = (tmp_path / "out/support/review/review.csv").read_text()
+    assert "refund matches the request" not in sheet                  # the sheet stays blind

@@ -12,9 +12,14 @@ into the judged rows.
 
 Rubric (JSON): a list of yes/no questions and the answer that counts as passing:
     [{"name": "correct_amount", "question": "Did the reply state the correct refund amount?", "pass": "yes"},
-     {"name": "no_forbidden_promise", "question": "Did the reply promise anything the policy forbids?", "pass": "no"}]
-An item passes when every question gets its passing answer. Yes/no questions are easier for a model to answer
-consistently than a 1-10 score, and each failed question says what went wrong.
+     {"name": "label_when_eligible", "question": "If the order was eligible, did it generate a label?",
+      "pass": "yes", "conditional": true}]
+An item passes when every applicable question gets its passing answer. A question marked "conditional" may be
+answered n/a (its condition doesn't hold) and is then left out; n/a on any other question makes the reply unusable.
+Every answer comes with a one-sentence reason (in the label rows), and every verdict records the judge version
+(model, rubric hash, prompt format) so results from a changed judge aren't compared as if nothing changed.
+Yes/no questions are easier for a model to answer consistently than a 1-10 score, and each failed question says what
+went wrong.
 
 The judge is any OpenAI-compatible chat endpoint (Together, OpenAI, vLLM, Ollama, ...), called with the standard
 library: no new dependency. A reply that isn't the JSON asked for gets "na" for that item (recorded, never a silent
@@ -36,9 +41,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 CARRIED = ("item", "case", "run", "arm", "tags")
+PROMPT_VERSION = 2   # bump when SYSTEM or the reply format changes: it's part of the judge version on every verdict
 SYSTEM = ("You grade an AI agent's work. Answer each question about the material with yes or no, judging only what "
-          "the material shows. Reply with one JSON object mapping each question's name to \"yes\" or \"no\", and "
-          "nothing else.")
+          "the material shows. A question marked [conditional] may be answered n/a when the material shows its "
+          "condition doesn't hold; never answer n/a otherwise. Give each answer a one-sentence reason that points to "
+          "the evidence in the material. Reply with one JSON object mapping each question's name to "
+          "{\"answer\": \"yes\" | \"no\" | \"n/a\", \"reason\": \"...\"}, and nothing else.")
 
 Chat = Callable[[list[dict]], str]
 
@@ -65,8 +73,19 @@ def load_rubric(path: str | Path) -> list[dict]:
             raise ValueError(f"each question needs name, question and pass (yes or no): {q}")
         if q["name"] in names:
             raise ValueError(f"duplicate question name {q['name']!r}")
+        if not isinstance(q.get("conditional", False), bool):
+            raise ValueError(f"'conditional' must be true or false: {q}")
         names.add(q["name"])
     return rubric
+
+
+def judge_version(model: str, rubric: list[dict]) -> str:
+    """What produced a verdict: the judge model, the rubric's content and the prompt format. Recorded on every label
+    and judged row, so a change in judge results can be traced to a change in the judge, and verdicts from different
+    judge versions aren't compared as if they were the same instrument."""
+    import hashlib
+    digest = hashlib.sha256(json.dumps(rubric, sort_keys=True).encode()).hexdigest()[:10]
+    return f"{model}|rubric:{digest}|prompt:{PROMPT_VERSION}"
 
 
 def load_items(path: str | Path) -> list[dict]:
@@ -81,13 +100,16 @@ def prompt(item: dict, rubric: list[dict], fields: list[str] | None = None) -> l
     keys = fields or [k for k in item if k not in CARRIED]
     material = "\n\n".join(f"## {k}\n{item[k] if isinstance(item[k], str) else json.dumps(item[k])}"
                            for k in keys if k in item)
-    questions = "\n".join(f"- {q['name']}: {q['question']}" for q in rubric)
+    questions = "\n".join(f"- {q['name']}{' [conditional]' if q.get('conditional') else ''}: {q['question']}"
+                          for q in rubric)
     return [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"{material}\n\n## Questions\n{questions}"}]
 
 
-def parse(reply: str, rubric: list[dict]) -> dict[str, bool] | None:
-    """Rubric answers as {name: answered the passing answer}, or None if the reply isn't usable."""
+def parse(reply: str, rubric: list[dict]) -> tuple[dict[str, bool | None], dict[str, str]] | None:
+    """({name: answered the passing answer, or None for n/a}, {name: reason}), or None if the reply isn't usable.
+    Accepts {"q": {"answer": "yes", "reason": "..."}} and the older {"q": "yes"}. n/a only counts for a question
+    marked conditional; on any other question it makes the reply unusable (a judge mustn't dodge a question)."""
     m = re.search(r"\{.*\}", reply or "", re.S)
     if not m:
         return None
@@ -95,13 +117,29 @@ def parse(reply: str, rubric: list[dict]) -> dict[str, bool] | None:
         data = json.loads(m.group(0))
     except ValueError:
         return None
-    out = {}
+    answers: dict[str, bool | None] = {}
+    reasons: dict[str, str] = {}
     for q in rubric:
-        v = str(data.get(q["name"], "")).strip().lower()
-        if v not in ("yes", "no"):
+        raw = data.get(q["name"])
+        value, reason = (raw.get("answer"), raw.get("reason")) if isinstance(raw, dict) else (raw, None)
+        v = str(value or "").strip().lower()
+        if v in ("n/a", "na", "not applicable") and q.get("conditional"):
+            answers[q["name"]] = None
+        elif v in ("yes", "no"):
+            answers[q["name"]] = v == q.get("pass", "yes")
+        else:
             return None
-        out[q["name"]] = v == q.get("pass", "yes")
-    return out
+        if reason:
+            reasons[q["name"]] = str(reason)[:300]
+    return answers, reasons
+
+
+def item_verdict(answers: dict[str, bool | None]) -> str:
+    """pass when every applicable question passed; na when none applied (every question n/a)."""
+    applicable = [v for v in answers.values() if v is not None]
+    if not applicable:
+        return "na"
+    return "pass" if all(applicable) else "fail"
 
 
 def http_chat(base_url: str, model: str, api_key: str | None, *, temperature: float | None = 0.0,
@@ -142,17 +180,25 @@ def judge_one(item: dict, rubric: list[dict], chat: Chat, fields: list[str] | No
         reply = chat(prompt(item, rubric, fields))
     except Exception as exc:                       # transport or server failure after retries
         return {"answers": None, "error": f"{type(exc).__name__}: {exc}"[:200], "unparsed": False}
-    answers = parse(reply, rubric)
-    return {"answers": answers, "error": None, "unparsed": answers is None, "reply": None if answers else reply[:300]}
+    parsed = parse(reply, rubric)
+    answers, reasons = parsed if parsed else (None, {})
+    return {"answers": answers, "reasons": reasons, "error": None, "unparsed": parsed is None,
+            "reply": None if parsed else reply[:300]}
 
 
-def _majority(answers: list[dict[str, bool]]) -> dict[str, bool]:
-    """Per question, the answer most repeats gave (a tie counts as not passing: the cautious reading)."""
-    return {k: sum(a[k] for a in answers) * 2 > len(answers) for k in answers[0]}
+def _majority(answers: list[dict[str, bool | None]]) -> dict[str, bool]:
+    """Per question, the answer most repeats gave, over the repeats where it applied (a tie counts as not passing:
+    the cautious reading). A question n/a in every repeat is left out."""
+    out = {}
+    for k in answers[0]:
+        applied = [a[k] for a in answers if a.get(k) is not None]
+        if applied:
+            out[k] = sum(applied) * 2 > len(applied)
+    return out
 
 
 def run(items: list[dict], rubric: list[dict], chat: Chat, *, repeats: int = 1, workers: int = 4,
-        fields: list[str] | None = None) -> tuple[list[dict], list[dict], dict]:
+        fields: list[str] | None = None, version: str | None = None) -> tuple[list[dict], list[dict], dict]:
     """(judge label rows, attempt rows with rubric checks, summary).
 
     Every repeat is a judge label row (so `agentstats judge` can measure the judge's flip rate). Attempt rows are one
@@ -171,22 +217,24 @@ def run(items: list[dict], rubric: list[dict], chat: Chat, *, repeats: int = 1, 
             counts["errors"] += 1
             errors.setdefault(i, res["error"])
             continue
+        stamp = {"judge": version} if version else {}
         if res["answers"] is None:
             counts["unparsed"] += 1
-            labels.append({"item": str(items[i]["item"]), "rater": "judge", "verdict": "na", "run": r})
+            labels.append({"item": str(items[i]["item"]), "rater": "judge", "verdict": "na", "run": r, **stamp})
             continue
         counts["judged"] += 1
         per_item[i].append(res["answers"])
         labels.append({"item": str(items[i]["item"]), "rater": "judge", "run": r,
-                       "verdict": "pass" if all(res["answers"].values()) else "fail"})
+                       "verdict": item_verdict(res["answers"]), "reasons": res["reasons"], **stamp})
     rows = []
     for i, item in enumerate(items):
+        tags = list(item.get("tags") or []) + ([f"judge:{version}"] if version else [])
         row = {"case": str(item.get("case", item["item"])), "run": int(item.get("run", 1)),
-               "arm": item.get("arm", "default"), "tags": list(item.get("tags") or []),
+               "arm": item.get("arm", "default"), "tags": tags,
                "passed": None, "infra_error": None, "checks": {}}
         if per_item[i]:
             row["checks"] = _majority(per_item[i])
-            row["passed"] = all(row["checks"].values())
+            row["passed"] = all(row["checks"].values()) if row["checks"] else None
         else:                                      # no usable verdict: the judge failed, not the agent
             row["infra_error"] = errors.get(i, "judge reply not parsed")
         rows.append(row)

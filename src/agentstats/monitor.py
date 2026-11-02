@@ -657,6 +657,32 @@ def write_review_helper(out: Path, items: dict[str, dict], link: str, fields: li
     (out / "review" / "REVIEW.md").write_text("\n".join(md))
 
 
+def judge_version_of(labels_path: Path) -> str:
+    """The judge version recorded on these verdicts ("unrecorded" for labels from before 0.12.0)."""
+    versions = {json.loads(x).get("judge") for x in labels_path.read_text().splitlines() if x.strip()} \
+        if labels_path.exists() else set()
+    versions.discard(None)
+    return ", ".join(sorted(versions)) or "unrecorded"
+
+
+def add_reasons_to_key(key_path: Path, labels_path: Path) -> None:
+    """Copy the judge's per-question reasons (first repeat) into the review key, next to its verdict. The key isn't
+    shown to the reviewer, so the review stays blind; afterwards it says why the judge decided what it did."""
+    if not key_path.exists() or not labels_path.exists():
+        return
+    reasons: dict[str, dict] = {}
+    for x in labels_path.read_text().splitlines():
+        if x.strip():
+            r = json.loads(x)
+            if r.get("reasons") and r["item"] not in reasons:
+                reasons[r["item"]] = r["reasons"]
+    rows = [json.loads(x) for x in key_path.read_text().splitlines() if x.strip()]
+    for r in rows:
+        if str(r.get("case")) in reasons:
+            r["judge_reasons"] = reasons[str(r["case"])]
+    key_path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
 def judge(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, settings: JudgeSettings, seed: int,
           link: str = "") -> tuple[str, str]:
     """(judge summary, review note) for one agent: rubric judge on a sample, then a blind review sheet."""
@@ -692,7 +718,8 @@ def judge(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, settings: 
                "rubric question. Failed questions: "
                + (", ".join(f"`{k}` {v}" for k, v in per_q.most_common()) or "none")
                + (f". Judge flip rate over {settings.repeats} repeats: {_pct(flip_rate)}." if flip_rate is not None
-                  else "."))
+                  else ".")
+               + f" Judge version: `{judge_version_of(out / 'judge_labels.jsonl')}`.")
     if flip_rate is not None and flip_rate > settings.max_flips:
         summary = (f"**The judge is unreliable** (flip rate {_pct(flip_rate)} over {settings.repeats} repeats, above "
                    f"{_pct(settings.max_flips)}): treat its verdicts as noise and fix the rubric before trusting them. "
@@ -701,6 +728,7 @@ def judge(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, settings: 
     _cli("review", "sample", str(rows_path), "--n", str(n), "--stratify-by", "source", "--seed", str(seed),
          "--out", str(out / "review"), *(["--link", link] if link else []))
     write_review_helper(out, {i["case"]: i for i in sample}, link, fields, cfg.get("review_instructions"))
+    add_reasons_to_key(out / "review" / "key.jsonl", out / "judge_labels.jsonl")
     return summary, (f"{n} judged runs sampled for review: read `{cfg['key']}/review/REVIEW.md` (each run's material "
                      f"and a trace link) and fill `{cfg['key']}/review/review.csv`; the judge's verdicts and sampling "
                      f"weights are in `{cfg['key']}/review/key.jsonl`.")

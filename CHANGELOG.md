@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.0 (2026-11-01)
+
+**Judge**
+- Every answer comes with a one-sentence reason pointing at the evidence (in the judge label rows). The weekly
+  report copies them into the review key, next to the judge's verdict; the reviewer's sheet stays blind.
+- Conditional questions: a rubric question with `"conditional": true` may be answered n/a when its condition doesn't
+  hold, and is left out of that item's verdict. n/a on any other question makes the reply unusable, so the judge
+  can't dodge a question.
+- Judge versions: every verdict records the judge model, a hash of the rubric and the prompt format (label rows get
+  `"judge"`, judged rows a `judge:` tag; `grade` prints it; the weekly report names it). `agentstats judge` warns
+  when one labels file mixes judge versions, since a reworded rubric is a different instrument.
+- `review sample` says what its size buys: the interval on the judge's agreement with the reviewer, and the items
+  needed for +-10 or +-5 points.
+- `grade` creates its output folders instead of losing the (paid) judge calls at the final write.
+- Checked on 20 real triage runs (DeepSeek, 2 repeats): 40/40 replies parsed in the new format, reasons on all,
+  verdicts identical to the previous format, 0% flips.
+
 ## 0.11.0 (2026-11-01)
 
 **Monitoring**

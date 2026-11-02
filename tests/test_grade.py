@@ -67,8 +67,8 @@ def test_prompt_shows_material_but_not_ids_or_tags():
 
 def test_parse_maps_answers_to_pass_and_rejects_bad_replies():
     assert judge_run.parse('{"correct_amount": "Yes", "forbidden_promise": "no"}', RUBRIC) == \
-        {"correct_amount": True, "forbidden_promise": True}
-    assert judge_run.parse('{"correct_amount": "yes", "forbidden_promise": "yes"}', RUBRIC)["forbidden_promise"] \
+        ({"correct_amount": True, "forbidden_promise": True}, {})
+    assert judge_run.parse('{"correct_amount": "yes", "forbidden_promise": "yes"}', RUBRIC)[0]["forbidden_promise"] \
         is False                                            # "yes" to a pass=no question fails it
     assert judge_run.parse("I think yes", RUBRIC) is None
     assert judge_run.parse('{"correct_amount": "yes"}', RUBRIC) is None           # a question unanswered
@@ -159,3 +159,53 @@ def test_cli_grade_with_a_fake_judge(tmp_path, monkeypatch):
     monkeypatch.delenv("K", raising=False)
     assert cli.main(["grade", str(items), "--rubric", str(rubric), "--model", "m", "--api-key-env", "K",
                      "--out", str(out)]) == 2                                    # no API key: a clear message
+
+
+
+# ---- reasons, conditional n/a, judge version (0.12.0) -----------------------------------------------------------
+
+COND = [{"name": "looked_up", "question": "Did it look up the order?", "pass": "yes"},
+        {"name": "label_if_eligible", "question": "If eligible, did it make a label?", "pass": "yes",
+         "conditional": True}]
+
+
+def test_answers_carry_reasons_and_conditional_questions_may_be_na():
+    reply = ('{"looked_up": {"answer": "yes", "reason": "get_order called first"}, '
+             '"label_if_eligible": {"answer": "n/a", "reason": "order was ineligible"}}')
+    answers, reasons = judge_run.parse(reply, COND)
+    assert answers == {"looked_up": True, "label_if_eligible": None}
+    assert reasons == {"looked_up": "get_order called first", "label_if_eligible": "order was ineligible"}
+    assert judge_run.item_verdict(answers) == "pass"                  # the n/a question is left out
+    dodge = '{"looked_up": {"answer": "n/a", "reason": "hm"}, "label_if_eligible": {"answer": "yes"}}'
+    assert judge_run.parse(dodge, COND) is None                       # n/a on a non-conditional question
+    assert judge_run.item_verdict({"a": None}) == "na"
+
+
+def test_the_prompt_marks_conditional_questions():
+    user = judge_run.prompt({"item": "x", "output": "o"}, COND)[1]["content"]
+    assert "- label_if_eligible [conditional]:" in user and "- looked_up: Did" in user
+
+
+def test_majority_ignores_na_repeats():
+    assert judge_run._majority([{"a": True, "b": None}, {"a": True, "b": None}]) == {"a": True}
+    assert judge_run._majority([{"a": None}, {"a": False}, {"a": False}]) == {"a": False}
+
+
+def test_every_verdict_records_the_judge_version():
+    v1 = judge_run.judge_version("m", COND)
+    assert v1.startswith("m|rubric:") and v1.endswith(f"|prompt:{judge_run.PROMPT_VERSION}")
+    changed = [dict(COND[0], question="Did it look the order up first?"), COND[1]]
+    assert judge_run.judge_version("m", changed) != v1                # a reworded rubric is a different judge
+    reply = '{"looked_up": {"answer": "yes", "reason": "r"}, "label_if_eligible": {"answer": "no", "reason": "r2"}}'
+    labels, rows, _ = judge_run.run([{"item": "i1", "output": "o"}], COND, lambda m: reply, version=v1)
+    assert labels[0]["judge"] == v1 and labels[0]["reasons"]["label_if_eligible"] == "r2"
+    assert f"judge:{v1}" in rows[0]["tags"] and rows[0]["passed"] is False
+
+
+def test_judge_warns_when_labels_mix_judge_versions(tmp_path, capsys):
+    f = tmp_path / "labels.jsonl"
+    f.write_text("".join(json.dumps(r) + "\n" for r in [
+        {"item": "a", "rater": "judge", "verdict": "pass", "run": 1, "judge": "m|rubric:1|prompt:2"},
+        {"item": "a", "rater": "judge", "verdict": "pass", "run": 2, "judge": "m|rubric:2|prompt:2"}]))
+    cli.main(["judge", str(f)])
+    assert "come from 2 judge versions" in capsys.readouterr().out
