@@ -56,3 +56,31 @@ def flake_rate(counts: dict[str, tuple[int, int]]) -> Interval | None:
         return None
     return bootstrap(multi, lambda us: mean([1.0 if 0 < c < n else 0.0 for n, c in us]),
                      method="bootstrap over cases")
+
+
+def suite_health(counts: dict[str, tuple[int, int]]) -> dict | None:
+    """What kind of eval set this is, from how its cases score. A regression suite (nearly everything passes) guards
+    against breakage but can't show an improvement; a frontier suite (30-70%) can move both ways. A frontier suite
+    nobody refreshes turns into a regression suite as the agent improves. counts: case -> (attempts, passes)."""
+    if not counts:
+        return None
+    n_cases = len(counts)
+    rate = mean([c / n for n, c in counts.values()])
+    always = sum(1 for n, c in counts.values() if c == n) / n_cases
+    never = sum(1 for n, c in counts.values() if c == 0) / n_cases
+    if rate >= 0.9 or always >= 0.8:
+        kind = "regression"
+        advice = ("most cases pass: it guards against breakage but can't show an improvement; to measure progress, "
+                  "keep a separate frontier set the agent passes 30-70% of the time")
+    elif 0.3 <= rate <= 0.7:
+        kind = "frontier"
+        advice = "room to move both ways: an improvement or a regression can show"
+    elif rate < 0.3 or never >= 0.5:
+        kind = "too_hard"
+        advice = ("most cases fail: check the never-pass cases for broken tasks or graders before reading anything "
+                  "into the rate")
+    else:
+        kind = "between"
+        advice = "between a regression and a frontier set: fine for gating, weak for showing gains"
+    return {"kind": kind, "pass_rate": rate, "always_share": always, "never_share": never, "cases": n_cases,
+            "advice": advice}

@@ -59,6 +59,13 @@ def summary(s: dict) -> str:
         lines.append(f"- Note: {n}")
     if s.get("run_pass_rates") and len(s["run_pass_rates"]) > 1:
         lines.append("- Per run: " + ", ".join(f"run {r} {_pct(v)}" for r, v in s["run_pass_rates"].items()))
+    if s.get("suite"):
+        h = s["suite"]
+        label = {"regression": "a regression suite", "frontier": "a frontier suite", "too_hard": "mostly too hard",
+                 "between": "between regression and frontier"}[h["kind"]]
+        lines += ["", "## What kind of eval set this is",
+                  f"{label.capitalize()}: {_pct(h['pass_rate'])} mean pass rate per case, {_pct(h['always_share'])} of "
+                  f"cases always pass, {_pct(h['never_share'])} never do. {h['advice'][0].upper() + h['advice'][1:]}."]
     inf = s["infra"]
     lines += ["", "## Infrastructure",
               f"{inf['count']} infrastructure failures ({_pct(inf['rate'])}), excluded from pass rates"

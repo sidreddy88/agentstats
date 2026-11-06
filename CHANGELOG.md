@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.14.0 (2026-11-06)
+
+**Grade your grader**
+- `agentstats grader-check items.jsonl --rubric rubric.json --model M [--exploit]`: the judge grades answers whose
+  verdict is known before it's trusted: the item's reference answer must pass; an empty answer, "I don't know." and
+  the question copied back must fail; with `--exploit`, an answer written by a model told to pass the rubric without
+  doing the task must fail. Exit 1 on any wrong verdict, for CI.
+
+**What kind of eval set is this?**
+- `summary` reports whether an eval set is a regression suite (90%+ per-case pass rate or 80%+ always-pass cases), a
+  frontier suite (30-70%), mostly too hard, or in between, with what each means for gating vs measuring progress.
+
+**verifiers v1**
+- `agentstats convert --format verifiers RUN_DIR`: one row per rollout from Prime Intellect's verifiers v1
+  `traces.jsonl` (reward = sum of score x weight; dropped / errored / timed-out traces are infrastructure failures;
+  tool calls fill `--rules` checks). Written against the Trace schema in verifiers' source; not yet checked on a real
+  run's file.
+
+**Fixed**
+- `coverage` no longer says "over/under needs 10+" when there are 10 or more production runs.
+
+Sources: "Enterprise Evals 101" (regression vs frontier suites; grade your graders; reference passes, do-nothing
+fails; the hacker / fixer / solver audit) and https://www.primeintellect.ai/blog/verifiers-v1.
+
 ## 0.13.0 (2026-11-06)
 
 **Is the eval set like production?**

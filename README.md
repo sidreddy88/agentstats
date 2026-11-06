@@ -32,11 +32,12 @@ Or pick what you need (Python 3.11+, one runtime dependency: scipy):
 | know whether your gate would catch a drop before trusting it | `agentstats size --baseline baseline.jsonl` |
 | watch production agents weekly from their traces | `agentstats monitor --config-dir agentstats/agents --days 7 --out monitor` |
 | find out what to check for each agent | `agentstats suggest trajectories.jsonl`, then `suggest-apply` |
-| grade with an LLM judge, and check the judge | `agentstats grade ...`, `agentstats judge labels.jsonl` |
+| grade with an LLM judge, and check the judge | `agentstats grade ...`, `agentstats grader-check ...`, `agentstats judge labels.jsonl` |
 | have a person check a sample of verdicts | `agentstats review sample` / `review import` |
 | turn production failures into eval cases | `agentstats promote find` / `promote accept` |
 | decide whether a cheaper model is good enough | `agentstats preregister`, then `agentstats switch` |
-| use Harbor, Inspect AI or trace exports | `agentstats convert`, `agentstats convert-traces` (Inspect logs are read directly) |
+| know whether the eval set looks like production | `agentstats coverage EVAL PRODUCTION --prefix error_type` |
+| use Harbor, Inspect AI, verifiers v1 or trace exports | `agentstats convert`, `agentstats convert-traces` (Inspect logs are read directly) |
 
 **See it on two real agents:** [examples/acme](https://github.com/sidreddy88/agentstats/tree/main/examples/acme)
 replays "a week at Acme" (a support agent and an Inspect coding agent) from recorded runs: a PR blocked at smoke, a
@@ -233,6 +234,12 @@ issue. Its first weeks found:
   2.5%; separately, a rubric question named as a double negative made the judge answer backwards, so `grade` now warns
   about negated names.
 
+**What kind of eval set is this?** `agentstats summary` now says: a *regression* suite (90%+ pass, or 80%+ of cases
+always pass) guards against breakage but can't show an improvement; a *frontier* suite (30-70%) can move both ways;
+*mostly too hard* means check the never-pass cases for broken tasks first. On agent-platform's 114-case triage gate:
+a regression suite (93.9% per case, 90.4% always pass), which is right for a merge gate and says to keep a separate,
+harder set for measuring progress.
+
 **Is the eval set like production?** `agentstats coverage` (or `"coverage"` in an agent's monitor config) compares
 how often each tag value appears in the eval set and in production. On the triage agent's first week, 62% of
 production events had a generic `ERROR` type that none of the 114 eval cases covered: the gate's pass rate said
@@ -372,6 +379,14 @@ tool calls become metrics; task, model and scalar sample metadata become tags (s
 `.eval` files are zstd-compressed: they're read with inspect-ai's own reader when it's installed, or the standard
 library on Python 3.14+; otherwise `inspect log convert --to json` first.
 
+**From verifiers v1** ([Prime Intellect's verifiers](https://www.primeintellect.ai/blog/verifiers-v1), the `verifiers.v1`
+namespace; `agentstats convert --format verifiers RUN_DIR --rules rules.json --out rows.jsonl`): one row per rollout in
+the run's `traces.jsonl` (case = `task.key`, run = `attempt`, arm = the harness or `--arm`). The reward is the sum of
+`score * weight` over the trace's rewards, passing at `--pass-threshold` (default 1.0, as for Harbor tasks); named
+metrics become `metric_<name>`; a dropped, errored or timed-out trace is an infrastructure failure. Tool calls from the
+message graph fill `--rules` checks; tokens, tool calls and model calls become metrics; model and harness become tags.
+Written against the `Trace` schema in verifiers' source, not yet checked on a real run's file.
+
 **What to evaluate, suggested from trajectories** (`agentstats suggest trajectories.jsonl --config-dir
 config/agents --out proposal.json`, then `agentstats suggest-apply proposal.json --config-dir config/agents`): input is
 one JSON line per agent run, `{"agent", "case", "passed": true|false|null, "tools": [...], "end": "..."}` (null for
@@ -395,6 +410,14 @@ labels (for `agentstats judge`'s flip rate), never extra attempts; `--rows` writ
 per-question majority as checks, so a rubric question can be gated like a behaviour rule. Each answer carries a one-sentence reason; a question marked
 `"conditional": true` may be answered n/a when its condition doesn't hold; and every verdict records the judge
 version (model, rubric hash, prompt format), with a warning when results from different judge versions are mixed.
+
+**Grade your grader first** (`agentstats grader-check items.jsonl --rubric rubric.json --model MODEL [--exploit]`):
+before an LLM judge gates anything, it grades answers whose verdict is known: each item's reference answer
+(`--reference-field`, must pass), an empty answer, "I don't know." and the question copied back (all must fail), and
+with `--exploit` an answer written by a model told to pass the rubric without doing the task (must fail; one extra
+call per item). Exit 1 when any probe is graded the wrong way, so CI can stop before a gate trusts a broken judge.
+Grading bugs can dominate a score (Anthropic's CORE-Bench results moved from 42% to 95% after grading fixes), and
+audits of agent benchmarks keep finding tasks that pass without doing the work.
 
 **Sampled human review** (`agentstats review sample ROWS --n 40 --stratify-by intent --link URL --out DIR`, then
 `agentstats review import DIR/review.csv --key DIR/key.jsonl --rater NAME --out labels.jsonl`): picks graded attempts

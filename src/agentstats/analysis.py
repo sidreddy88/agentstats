@@ -222,6 +222,9 @@ def summarize(attempts: list[Attempt], design: str = "curated", cluster_by: str 
                      "Above 5%: check the environment before trusting the numbers.")
     if len(runs) >= 2:
         out["reliability"] = reliability.summarize(counts, conf)
+    health = reliability.suite_health(counts)
+    if health:
+        out["suite"] = health
     tags = sorted({t for ts in case_tags.values() for t in ts})
     if tags:
         out["slices"] = {}
