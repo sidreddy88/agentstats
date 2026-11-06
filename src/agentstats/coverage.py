@@ -79,8 +79,9 @@ def compare(eval_rows: list[dict], production_rows: list[dict], prefixes: list[s
 def render(res: dict, top: int = 12) -> str:
     lines = [f"Eval set: {res['eval_cases']} cases. Production: {res['production_runs']} runs."]
     if res["production_runs"] < 30:
-        lines.append(f"Only {res['production_runs']} production runs: shares are rough "
-                     f"(over/under needs {MIN_RUNS}+); 'missing' is still worth acting on.")
+        lines.append(f"Only {res['production_runs']} production runs: shares are rough"
+                     + (f" (over/under needs {MIN_RUNS}+)" if res["production_runs"] < MIN_RUNS else "")
+                     + "; 'missing' is still worth acting on.")
     for prefix in res.get("untagged", []):
         lines.append(f"The eval set has no `{prefix}:` tags, so {prefix} can't be compared "
                      "(tag the cases to check it).")

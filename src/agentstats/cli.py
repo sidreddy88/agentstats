@@ -22,7 +22,7 @@ DESCRIPTION = ("Evals for agent systems: a statistics core (intervals, paired te
 GROUPS = [
     ("Set up and monitor", ["init", "monitor", "suggest", "suggest-apply", "init-ci"]),
     ("Gate and compare", ["gate", "compare", "summary", "size", "sample", "preregister", "switch"]),
-    ("Check your graders", ["grade", "judge", "review"]),
+    ("Check your graders", ["grade", "grader-check", "judge", "review"]),
     ("Grow the eval set", ["promote", "coverage"]),
     ("Read your data", ["convert", "convert-traces", "check"]),
 ]
@@ -128,6 +128,28 @@ def _grade(args, chat=None) -> int:
         print(f"Judge consistency: `agentstats judge {args.out}`; add human labels to the same file to check "
               "agreement.")
     return 0 if counts["judged"] else 3
+
+
+def _grader_check(args, chat=None) -> int:
+    from agentstats import grader_check, judge_run
+    try:
+        rubric, items = judge_run.load_rubric(args.rubric), judge_run.load_items(args.items)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}")
+        return 2
+    if chat is None:
+        key = os.environ.get(args.api_key_env)
+        if not key:
+            print(f"set {args.api_key_env} (or choose another variable with --api-key-env)")
+            return 2
+        chat = judge_run.http_chat(args.base_url, args.model, key,
+                                   temperature=None if args.temperature < 0 else args.temperature)
+    fields = [f.strip() for f in args.fields.split(",")] if args.fields else None
+    res = grader_check.run(items, rubric, chat, output_field=args.output_field, input_field=args.input_field,
+                           reference_field=args.reference_field, fields=fields, n=args.n,
+                           exploit_chat=chat if args.exploit else None)
+    print(json.dumps(res, indent=1) if args.json else grader_check.render(res), end="")
+    return 0 if res["ok"] else 1
 
 
 def _init(args) -> int:
@@ -243,15 +265,17 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--rules", required=True, help="rules JSON (see agentstats.checks)")
     k.add_argument("--out", required=True, help="output JSONL with checks filled in")
 
-    v = sub.add_parser("convert", help="Harbor job dir(s) or Inspect AI logs to agentstats JSONL")
+    v = sub.add_parser("convert", help="Harbor jobs, Inspect AI logs or verifiers v1 traces to agentstats JSONL")
     v.add_argument("jobs", nargs="+",
-                   help="Harbor job directories, or Inspect logs (.eval / .json) with --format inspect")
-    v.add_argument("--format", choices=["harbor", "inspect"], default="harbor")
+                   help="Harbor job directories, Inspect logs (.eval / .json) with --format inspect, or verifiers "
+                        "v1 run directories / traces.jsonl with --format verifiers")
+    v.add_argument("--format", choices=["harbor", "inspect", "verifiers"], default="harbor")
     v.add_argument("--scorer", help="Inspect: which scorer gives pass/fail (default: the log's headline scorer)")
-    v.add_argument("--pass-threshold", type=float, default=1.0, help="Inspect: numeric scores pass at or above this")
+    v.add_argument("--pass-threshold", type=float, default=1.0,
+                   help="Inspect / verifiers: numeric scores (rewards) pass at or above this")
     v.add_argument("--errors", choices=["infra", "fail"], default="infra",
                    help="Inspect: a sample that errored is an infrastructure failure (default) or a failed attempt")
-    v.add_argument("--rules", help="Inspect: rules JSON; fills each row's checks from the sample's tool calls")
+    v.add_argument("--rules", help="Inspect / verifiers: rules JSON; fills each row's checks from the tool calls")
     v.add_argument("--arm", help="arm name (Inspect default: the log's model)")
     v.add_argument("--out", required=True)
 
@@ -341,6 +365,22 @@ def main(argv: list[str] | None = None) -> int:
     gr.add_argument("--fields", help="comma-separated item fields to show the judge (default: all but ids/tags)")
     gr.add_argument("--out", required=True, help="judge label rows (JSONL) for `agentstats judge`")
     gr.add_argument("--rows", help="also write attempt rows whose checks are the rubric answers")
+    gc = sub.add_parser("grader-check", help="known-answer probes for an LLM judge: reference must pass, blanks fail")
+    gc.add_argument("items", help="the items file `grade` takes; probes replace each item's output")
+    gc.add_argument("--rubric", required=True)
+    gc.add_argument("--model", required=True)
+    gc.add_argument("--base-url", default="https://api.openai.com/v1")
+    gc.add_argument("--api-key-env", default="OPENAI_API_KEY")
+    gc.add_argument("--temperature", type=float, default=0.0)
+    gc.add_argument("--n", type=int, default=10, help="items to probe (default 10)")
+    gc.add_argument("--output-field", default="output", help="the item field holding the answer (default output)")
+    gc.add_argument("--input-field", default="input", help="the item field holding the task (default input)")
+    gc.add_argument("--reference-field", default="reference", help="field with a known-good answer (default reference)")
+    gc.add_argument("--fields", help="comma-separated item fields to show the judge (as in `grade`)")
+    gc.add_argument("--exploit", action="store_true",
+                    help="also ask the model to write answers that pass without doing the task (paid; one extra call "
+                         "per item)")
+    gc.add_argument("--json", action="store_true")
     sg = sub.add_parser("suggest", help="propose behaviour rules and eval advice per agent from its trajectories")
     sg.add_argument("trajectories", nargs="+",
                     help='JSONL: {"agent", "case", "passed": true|false|null, "tools": [...]}')
@@ -388,6 +428,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
         return switch_cli.run(args)
+    if args.cmd == "grader-check":
+        return _grader_check(args)
     if args.cmd == "coverage":
         from agentstats import coverage
         rename = dict(x.split("=", 1) for x in args.rename)
@@ -480,6 +522,14 @@ def main(argv: list[str] | None = None) -> int:
         graded = sum(1 for a in atts if a.passed is not None)
         print(f"wrote {args.out}: {len(atts)} traces, {graded} with a verdict"
               + ("" if graded else " (rules-only)"))
+    elif args.cmd == "convert" and args.format == "verifiers":
+        from agentstats import verifiers_v1
+        rules = checks.load_rules(args.rules) if args.rules else None
+        atts = [a for p in args.jobs
+                for a in verifiers_v1.load(p, pass_threshold=args.pass_threshold, rules=rules, arm=args.arm)]
+        records.write_jsonl(atts, args.out)
+        infra = sum(1 for a in atts if a.infra_error)
+        print(f"wrote {args.out}: {len(atts)} rollouts, {infra} infrastructure failures")
     elif args.cmd == "convert" and args.format == "inspect":
         from agentstats import inspect_logs
         rules = checks.load_rules(args.rules) if args.rules else None
