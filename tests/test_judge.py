@@ -62,3 +62,50 @@ def test_analyze_uses_heldout_when_marked():
             r["split"] = "heldout"
     al = judge.analyze(rows)["alignment"]
     assert al["scope"] == "heldout" and al["n"] == 2
+
+
+def test_krippendorff_alpha_matches_the_published_example():
+    # Krippendorff, "Computing Krippendorff's Alpha-Reliability": 4 coders, 12 units, missing values; nominal 0.743.
+    coders = [[1, 2, 3, 3, 2, 1, 4, 1, 2, None, None, None],
+              [1, 2, 3, 3, 2, 2, 4, 1, 2, 5, None, 3],
+              [None, 3, 3, 3, 2, 3, 4, 2, 2, 5, 1, None],
+              [1, 2, 3, 3, 2, 4, 4, 1, 2, 5, 1, None]]
+    units = [[c[u] for c in coders if c[u] is not None] for u in range(12)]
+    assert judge.krippendorff_alpha(units) == pytest.approx(0.743, abs=5e-4)
+
+
+def test_alpha_uses_items_with_uneven_rater_counts():
+    rows = _rows()
+    rows += [{"item": "i7", "rater": r, "verdict": "pass"} for r in ("human:a", "human:b")]
+    h = judge.analyze(rows)["human_agreement"]
+    assert h["raters_per_item"] == 3 and h["items"] == 6          # Fleiss: only the 3-rater items
+    assert h["alpha_items"] == 7                                   # alpha: every item with 2+ human labels
+
+
+def _ceiling_rows(judge_wrong: int, n: int = 40):
+    """n items, 3 humans who agree except on every 5th item (2-1 split); the judge gets `judge_wrong` items wrong."""
+    rows = []
+    for k in range(n):
+        item, truth = f"c{k}", ("pass" if k % 2 else "fail")
+        other = "fail" if truth == "pass" else "pass"
+        labels = [truth, truth, other if k % 5 == 0 else truth]
+        rows += [{"item": item, "rater": f"human:{r}", "verdict": v} for r, v in zip("abc", labels, strict=True)]
+        rows.append({"item": item, "rater": "judge", "verdict": other if k < judge_wrong else truth})
+    return rows
+
+
+def test_ceiling_judge_as_good_as_people_is_within_noise():
+    c = judge.analyze(_ceiling_rows(judge_wrong=0))["ceiling"]
+    assert c["n"] == 40 and c["human_human"] == pytest.approx(1 - 8 * (2 / 3) / 40)
+    assert c["judge_human"] >= c["human_human"]
+    assert c["difference"]["high"] >= 0 and not c["verdict"].startswith("below")
+
+
+def test_ceiling_a_judge_that_often_disagrees_is_below_human_agreement():
+    c = judge.analyze(_ceiling_rows(judge_wrong=16))["ceiling"]
+    assert c["difference"]["high"] < 0 and c["verdict"].startswith("below human agreement")
+
+
+def test_ceiling_needs_two_human_labels():
+    rows = [{"item": "x", "rater": "human:a", "verdict": "pass"}, {"item": "x", "rater": "judge", "verdict": "pass"}]
+    assert "ceiling" not in judge.analyze(rows)

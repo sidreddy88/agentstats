@@ -36,6 +36,10 @@ def _ci(iv: dict, fmt=_pct) -> str:
     return f"{fmt(iv['estimate'])} (95% CI {fmt(iv['low'])} to {fmt(iv['high'])})"
 
 
+def _pts(x: float) -> str:
+    return "n/a" if x is None or math.isnan(x) else f"{100 * x:+.1f} pts"
+
+
 def _num(x: float) -> str:
     if x is None or math.isnan(x):
         return "n/a"
@@ -125,8 +129,9 @@ def judge(j: dict) -> str:
     if "human_agreement" in j:
         h = j["human_agreement"]
         lines += ["", "## Human agreement",
-                  f"Fleiss' kappa {h['fleiss_kappa']:.2f} over {h['items']} items with {h['raters_per_item']} "
-                  f"raters each; {h['unanimous']} unanimous."]
+                  f"Krippendorff's alpha {h['krippendorff_alpha']:.2f} over {h['alpha_items']} items with 2+ human "
+                  f"labels. Fleiss' kappa {h['fleiss_kappa']:.2f} over {h['items']} items with "
+                  f"{h['raters_per_item']} raters each; {h['unanimous']} unanimous."]
     if "alignment" in j:
         a = j["alignment"]
 
@@ -142,6 +147,12 @@ def judge(j: dict) -> str:
         if a["disagreements"]:
             lines.append("Disagreements: " + ", ".join(f"{x['item']} (human {x['human']}, judge {x['judge']})"
                                                         for x in a["disagreements"][:10]))
+    if "ceiling" in j:
+        c = j["ceiling"]
+        lines += ["", f"## Judge vs the human ceiling ({c['scope']}, n = {c['n']})",
+                  f"People agree with each other {100 * c['human_human']:.1f}% of the time; the judge agrees with a "
+                  f"person {100 * c['judge_human']:.1f}%. Difference {_ci(c['difference'], _pts)}: {c['verdict']}."
+                  + (f" ({c['note']})" if c["note"] else "")]
     if "consistency" in j:
         c = j["consistency"]
         lines += ["", "## Judge consistency",

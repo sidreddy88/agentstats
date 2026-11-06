@@ -233,6 +233,11 @@ issue. Its first weeks found:
   2.5%; separately, a rubric question named as a double negative made the judge answer backwards, so `grade` now warns
   about negated names.
 
+**Is the eval set like production?** `agentstats coverage` (or `"coverage"` in an agent's monitor config) compares
+how often each tag value appears in the eval set and in production. On the triage agent's first week, 62% of
+production events had a generic `ERROR` type that none of the 114 eval cases covered: the gate's pass rate said
+nothing about the most common real input.
+
 On the same week of real traces, `agentstats monitor` produced byte-identical rows to the hand-written script it
 replaced. Logic a config can't express (parsing an answer out of free text, a check that needs code) goes in an adapter
 file passed with `--adapters` (`ADAPTERS = {"name": MyAdapter()}`, subclasses of `agentstats.monitor.Adapter`).
@@ -432,6 +437,11 @@ A synthetic judge-labels file is in `examples/judge_labels.jsonl`.
   [arXiv 2602.07150](https://arxiv.org/abs/2602.07150).
 - Judge self-inconsistency: Haldar & Hockenmaier 2025 (EMNLP Findings); Yagubyan 2026,
   [arXiv 2606.13685](https://arxiv.org/abs/2606.13685).
+- Human agreement with any number of raters per item: Krippendorff's alpha (nominal), Krippendorff,
+  "Computing Krippendorff's Alpha-Reliability" (2011); checked against its worked example and the `krippendorff`
+  package. Judge agreement is reported against the human ceiling (how often people agree with each other).
+- Realistic, diverse eval sets; judges calibrated against human agreement; auditing tasks nothing passes: Cameron R.
+  Wolfe, "Evaluating Agents on Highly Subjective Tasks" (Deep (Learning) Focus, 2026-10-21).
 - Pre-registration (fix the analysis before seeing the data): Nosek et al. 2018, "The preregistration revolution",
   [PNAS](https://doi.org/10.1073/pnas.1708274114). The switch rule is a standard non-inferiority test (lower interval
   bound above -margin) on the same fixed-cases interval the gates use.

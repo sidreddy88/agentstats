@@ -129,3 +129,24 @@ def test_cli_sample_then_import(tmp_path):
 def test_precision_note_says_what_a_sample_size_buys():
     note = review.precision_note(20)
     assert "With 20 reviewed items" in note and "+-16 points" in note and "+-10 points needs 49" in note
+
+
+def test_cases_that_fail_every_run_are_their_own_group():
+    rows = [from_dict({"case": f"n{i}", "run": r, "passed": False}) for i in range(4) for r in (1, 2)]   # never pass
+    rows += [from_dict({"case": f"f{i}", "run": r, "passed": r == 1}) for i in range(10) for r in (1, 2)]  # flaky
+    rows += [from_dict({"case": "once", "passed": False})]                       # one run: not enough to call it
+    sheet, key, summary = review.sample(rows, 20)
+    assert summary["strata"] == {"never": 8, "fail": 11, "pass": 10}
+    assert {k["case"] for k in key if k["stratum"] == "never"} <= {f"n{i}" for i in range(4)}
+    assert review.never_passed(rows) == frozenset(("default", f"n{i}") for i in range(4))
+
+
+def test_a_rule_disagreement_outranks_never():
+    a = from_dict({"case": "n", "run": 1, "passed": False, "checks": {"looked_up": True}})
+    assert review.stratum(a, frozenset({("default", "n")})) == "disagree"
+
+
+def test_report_explains_the_never_group():
+    report = {"labelled": 3, "unsure": 0, "blank": 0, "population": {}, "population_ci": {}, "on_sample": {},
+              "by_stratum": {"never": {"n": 3, "agreement": 0.33}}}
+    assert "check the task and the grader, not the agent" in review.render(report)
