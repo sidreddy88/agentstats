@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.13.0 (2026-11-06)
+
+**Is the eval set like production?**
+- `agentstats coverage EVAL PRODUCTION --prefix error_type [--rename template=error_type]`: each tag value's share in
+  the eval set (each case once) and in production runs, the difference with a Newcombe interval, and a flag:
+  *missing* (production sees it, the eval set has no case of it), *under* / *over* (interval excludes zero, with 10+
+  production runs). Values only in the eval set are listed, not flagged.
+- `monitor`: an agent config with `"coverage": {"prefixes": [...], "rename": {...}}` and an `eval_set` gets an
+  "Eval set vs production" section in the weekly report (and `coverage.json`).
+- First real use (agent-platform triage, one week): 62% of production events had error type `ERROR`, which the
+  114-case eval set never covers.
+
+**Judge**
+- Krippendorff's alpha for human agreement, over every item with 2+ human labels (any number of raters per item);
+  Fleiss' kappa needed the same count on every item and silently left the rest out. Checked against Krippendorff's
+  worked example (0.743) and the `krippendorff` package (agreement to 4e-16 on 200 random label sets).
+- Judge vs the human ceiling: how often the judge agrees with each person versus how often people agree with each
+  other, with an item-bootstrap interval on the difference and a verdict (below, within noise of, or above human
+  agreement). For subjective criteria, "within noise of human agreement" is the realistic target.
+
+**Review**
+- New review group, *never*: runs of cases that failed every run (2+ runs). A case nothing passes may be a broken task
+  or grader; the import report says so when reviewers pass them. Runs where the verdict and the rules disagree still
+  come first.
+
+Source for all three: Cameron R. Wolfe, "Evaluating Agents on Highly Subjective Tasks" (Deep (Learning) Focus,
+2026-10-21): realistic and diverse eval sets, judges calibrated against human agreement, auditing tasks nothing
+passes.
+
 ## 0.12.0 (2026-11-01)
 
 **Judge**

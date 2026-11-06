@@ -18,6 +18,8 @@ Each agent is a config file, <config-dir>/<name>.json:
   rubric, judge_fields, judge_sample, review_n   the rubric judge and the human review sample (optional)
   review_instructions   what a reviewer should check for this agent, printed atop its review sheet (optional)
   eval_set       path to the agent's eval set; a cheaper-model candidate is only proposed for testing with one
+  coverage       {"prefixes": ["error_type", ...], "rename": {"template": "error_type"}}: compare the eval set's tag
+                 mix with this window's production runs (agentstats coverage) and report gaps (optional)
   group_by       tag prefix for candidate eval cases (optional)
 `agentstats suggest-apply` writes this format, so accepted suggestions are monitored the next run.
 
@@ -992,7 +994,15 @@ def run_agent(cfg: dict, traces: list[dict], adapter: Adapter, out: Path, *, jud
         if cfg.get("group_by"):
             args += ["--group-by", cfg["group_by"]]
         table = "\n".join(ln for ln in _cli(*args).splitlines() if ln.startswith("|"))
-    return render_agent(cfg, rows, rule_summary, judge_summary, review_note, table, failures, floor)
+    lines = render_agent(cfg, rows, rule_summary, judge_summary, review_note, table, failures, floor)
+    cov = cfg.get("coverage")
+    if cov and prod_rows and cfg.get("eval_set") and Path(cfg["eval_set"]).exists():
+        from agentstats import coverage
+        res = coverage.compare(coverage.load_rows(cfg["eval_set"]), prod_rows, list(cov.get("prefixes", [])),
+                               dict(cov.get("rename", {})))
+        (out / "coverage.json").write_text(json.dumps(res, indent=1))
+        lines += ["**Eval set vs production**", "", coverage.render(res)]
+    return lines
 
 
 def run(config_dir: str | Path, out: str | Path, *, source, start: dt.datetime, end: dt.datetime,

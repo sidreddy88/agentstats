@@ -4,12 +4,16 @@ Can you trust your autorater (LLM judge)? Three checks.
 Input rows: {"item": "...", "rater": "human:alice" | "judge", "verdict": "pass" | "fail" | "na",
              "run": 1, "split": "tune" | "heldout"}
 
-1. Human agreement (are the labels themselves trustworthy?): Fleiss' kappa over items with >= 2 human labels.
+1. Human agreement (are the labels themselves trustworthy?): Krippendorff's alpha over every item with >= 2 human
+   labels (any number of raters per item), and Fleiss' kappa over the items sharing the most common rater count.
 2. Judge vs humans (alignment): judge verdict vs the human majority. accuracy, strictness (false fails among
    human passes), leniency (false passes among human fails: the dangerous one when a pass justifies a release),
    Cohen's kappa. Reported on the held-out split when one is marked, so tuning the judge doesn't flatter it.
 3. Judge consistency (is the judge itself stable?): over repeated judge runs on the same item, verdict flip rate
    and mean pairwise disagreement (or mean pairwise |delta| for numeric scores).
+4. Judge vs the human ceiling: on items with >= 2 human labels, how often the judge agrees with each person versus
+   how often people agree with each other, and the difference with an item-bootstrap interval. A judge can't be
+   expected to beat human agreement; "within noise of it" is the practical target for subjective criteria.
 """
 from __future__ import annotations
 
@@ -17,7 +21,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from agentstats.intervals import wilson
+from agentstats.intervals import bootstrap, wilson
 
 
 def load(path: str | Path) -> list[dict]:
@@ -57,6 +61,25 @@ def fleiss_kappa(table: list[list[int]]) -> float:
     p_cats = [t / (n_items * m) for t in totals]
     pe = sum(p * p for p in p_cats)
     return 1.0 if pe == 1 else (p_bar - pe) / (1 - pe)
+
+
+def krippendorff_alpha(units: list[list]) -> float:
+    """Nominal Krippendorff's alpha. units[i]: the labels item i received (any number; items with fewer than 2
+    are not pairable and are skipped). Unlike Fleiss' kappa it needs no fixed number of raters per item."""
+    pairable = [u for u in units if len(u) >= 2]
+    n = sum(len(u) for u in pairable)
+    if n < 2:
+        return float("nan")
+    totals: Counter = Counter()
+    d_obs = 0.0
+    for u in pairable:
+        counts = Counter(u)
+        totals.update(counts)
+        m = len(u)
+        d_obs += sum(counts[c] * counts[k] for c in counts for k in counts if c != k) / (m - 1)
+    d_obs /= n
+    d_exp = sum(totals[c] * totals[k] for c in totals for k in totals if c != k) / (n * (n - 1))
+    return 1.0 if d_exp == 0 else 1 - d_obs / d_exp
 
 
 def pairwise_disagreement(verdicts: list) -> float:
@@ -102,6 +125,7 @@ def analyze(rows: list[dict], positive: str = "pass") -> dict:
         out["human_agreement"] = {
             "items": len(rows_same), "raters_per_item": m, "fleiss_kappa": fleiss_kappa(table),
             "unanimous": sum(1 for vs in rows_same if len(set(vs)) == 1),
+            "alpha_items": len(multi), "krippendorff_alpha": krippendorff_alpha(list(multi.values())),
         }
 
     # Human label per item: majority; ties dropped.
@@ -141,6 +165,34 @@ def analyze(rows: list[dict], positive: str = "pass") -> dict:
                    "leniency": wilson(fp, tn + fp).to_json() if tn + fp else None},
             "disagreements": [{"item": i, "human": labels[i], "judge": judge_label(judge[i])}
                               for i in scope if labels[i] != judge_label(judge[i])],
+        }
+
+    # 4. Judge vs the human ceiling
+    ceiling_items = [i for i in multi if i in judge and judge_label(judge[i]) != "na"
+                     and all(v != "na" for v in multi[i])]
+    ceil_heldout = [i for i in ceiling_items if split.get(i) == "heldout"]
+    ceil_scope = ceil_heldout if ceil_heldout else ceiling_items
+    if ceil_scope:
+        units = []
+        for i in ceil_scope:
+            hs, jl = multi[i], judge_label(judge[i])
+            pairs = len(hs) * (len(hs) - 1) / 2
+            agree_hh = sum(1 for a in range(len(hs)) for b in range(a + 1, len(hs)) if hs[a] == hs[b]) / pairs
+            agree_jh = sum(1 for v in hs if v == jl) / len(hs)
+            units.append((agree_hh, agree_jh))
+        diff = bootstrap(units, lambda us: sum(j - h for h, j in us) / len(us))
+        if diff.high < 0:
+            verdict = "below human agreement: the judge disagrees with people more than they disagree with each other"
+        elif diff.low > 0:
+            verdict = "above human agreement (unusual: check that the judge isn't agreeing with one rater's habits)"
+        else:
+            verdict = "within noise of human agreement"
+        out["ceiling"] = {
+            "scope": "heldout" if ceil_heldout else "all items with 2+ human labels", "n": len(ceil_scope),
+            "human_human": sum(h for h, _ in units) / len(units),
+            "judge_human": sum(j for _, j in units) / len(units),
+            "difference": diff.to_json(), "verdict": verdict,
+            "note": "few items: the interval is wide" if len(ceil_scope) < 30 else "",
         }
 
     # 3. Judge consistency

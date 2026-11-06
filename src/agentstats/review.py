@@ -11,11 +11,13 @@ Sampled human review of graded attempts: is the grader (usually an LLM judge) ri
 Which attempts get reviewed. Each graded attempt (infrastructure failures left out) falls in one stratum:
 - "disagree": the verdict and the behaviour rules point opposite ways (passed with a rule violated, or failed with
   every rule satisfied): where a grader is most often wrong;
+- "never": failures of a case that failed every one of its runs (2+ runs): a task nothing passes may be a broken
+  task or grader rather than a weak agent, so these are checked as their own group;
 - "fail": the other failures;
 - "pass": the other passes.
-Half the sample goes to "disagree" (all of them if there are fewer), half of the rest to "fail", the remainder to
-"pass"; unused places move on. Within a stratum the pick is spread over --stratify-by groups (e.g. intent) and is
-deterministic for a --seed.
+Half the sample goes to "disagree" (all of them if there are fewer), half of the rest to "never", half of what's
+left to "fail", the remainder to "pass"; unused places move on. Within a stratum the pick is spread over
+--stratify-by groups (e.g. intent) and is deterministic for a --seed.
 
 Blind by default. review.csv has the item, a link and empty columns; the grader's verdict, the stratum and the
 sampling weight are only in key.jsonl, so the reviewer can't be anchored by them (or by why an item was picked).
@@ -35,7 +37,7 @@ from pathlib import Path
 from agentstats.records import Attempt
 from agentstats.sample import stratified
 
-STRATA = ("disagree", "fail", "pass")
+STRATA = ("disagree", "never", "fail", "pass")
 VERDICTS = {"pass": "pass", "p": "pass", "yes": "pass", "y": "pass", "1": "pass", "true": "pass", "correct": "pass",
             "fail": "fail", "f": "fail", "no": "fail", "n": "fail", "0": "fail", "false": "fail", "wrong": "fail",
             "unsure": "na", "na": "na", "n/a": "na", "skip": "na", "?": "na"}
@@ -46,13 +48,23 @@ def item_id(a: Attempt) -> str:
     return f"{a.arm}|{a.case}|{a.run}"
 
 
-def stratum(a: Attempt) -> str:
+def stratum(a: Attempt, never: frozenset = frozenset()) -> str:
     if a.checks:
         if a.passed and not all(a.checks.values()):
             return "disagree"
         if a.passed is False and all(a.checks.values()):
             return "disagree"
+    if not a.passed and (a.arm, a.case) in never:
+        return "never"
     return "pass" if a.passed else "fail"
+
+
+def never_passed(attempts: list[Attempt]) -> frozenset:
+    """(arm, case) pairs with 2+ graded runs and no pass among them."""
+    runs: dict[tuple, list[bool]] = defaultdict(list)
+    for a in attempts:
+        runs[(a.arm, a.case)].append(bool(a.passed))
+    return frozenset(k for k, v in runs.items() if len(v) >= 2 and not any(v))
 
 
 def _allocate(sizes: dict[str, int], n: int) -> dict[str, int]:
@@ -70,7 +82,7 @@ def _allocate(sizes: dict[str, int], n: int) -> dict[str, int]:
         extra = min(left, sizes.get(s, 0) - alloc[s])
         alloc[s] += extra
         left -= extra
-    return alloc
+    return {s: k for s, k in alloc.items() if k or sizes.get(s)}
 
 
 def precision_note(n: int, agreement: float = 0.85) -> str:
@@ -94,8 +106,9 @@ def sample(attempts: list[Attempt], n: int, *, stratify_by: str | None = None, s
     if not graded:
         raise ValueError("no graded attempts to review (rows need passed true/false and no infra_error)")
     by_stratum: dict[str, dict[str, Attempt]] = defaultdict(dict)
+    never = never_passed(graded)
     for a in graded:
-        by_stratum[stratum(a)][item_id(a)] = a
+        by_stratum[stratum(a, never)][item_id(a)] = a
     sizes = {s: len(v) for s, v in by_stratum.items()}
     alloc = _allocate(sizes, n)
     picked: list[tuple[str, Attempt, float]] = []
@@ -216,4 +229,8 @@ def render(report: dict) -> str:
         lines.append(f"| {label} | {pct(smp.get(k))} | {pct(pop.get(k))} | {interval} |")
     lines += ["", "By stratum (unweighted): " + ", ".join(
         f"{s}: n={v['n']}, agreement {pct(v['agreement'])}" for s, v in report["by_stratum"].items())]
+    nv = report["by_stratum"].get("never")
+    if nv:
+        lines += ["", f"never ({nv['n']} reviewed): runs of cases that failed every time. Where the reviewer passes "
+                  "them, check the task and the grader, not the agent: a case nothing passes may be broken."]
     return "\n".join(lines)

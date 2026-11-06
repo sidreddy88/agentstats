@@ -23,7 +23,7 @@ GROUPS = [
     ("Set up and monitor", ["init", "monitor", "suggest", "suggest-apply", "init-ci"]),
     ("Gate and compare", ["gate", "compare", "summary", "size", "sample", "preregister", "switch"]),
     ("Check your graders", ["grade", "judge", "review"]),
-    ("Grow the eval set", ["promote"]),
+    ("Grow the eval set", ["promote", "coverage"]),
     ("Read your data", ["convert", "convert-traces", "check"]),
 ]
 
@@ -229,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:
     j.add_argument("labels", help="JSONL: item, rater (human:<name> | judge), verdict, [run], [split]")
     j.add_argument("--json", action="store_true")
 
+    cv = sub.add_parser("coverage", help="is the eval set like production? tag shares compared, gaps flagged")
+    cv.add_argument("eval_set", help="eval set rows (JSONL with case and tags); each case counts once")
+    cv.add_argument("production", help="production rows (JSONL, e.g. monitor's production_rows.jsonl)")
+    cv.add_argument("--prefix", action="append", required=True,
+                    help="tag prefix to compare, e.g. error_type (repeat for several)")
+    cv.add_argument("--rename", action="append", default=[],
+                    help="eval-set prefix to read as a production prefix, e.g. template=error_type")
+    cv.add_argument("--json", action="store_true")
+
     k = sub.add_parser("check", help="run deterministic trajectory rules over a Harbor job; writes JSONL")
     k.add_argument("job", help="Harbor job directory")
     k.add_argument("--rules", required=True, help="rules JSON (see agentstats.checks)")
@@ -379,6 +388,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd in ("preregister", "switch"):
         return switch_cli.run(args)
+    if args.cmd == "coverage":
+        from agentstats import coverage
+        rename = dict(x.split("=", 1) for x in args.rename)
+        res = coverage.compare(coverage.load_rows(args.eval_set), coverage.load_rows(args.production),
+                               args.prefix, rename)
+        print(json.dumps(res, indent=1) if args.json else coverage.render(res), end="")
+        return 0
     if args.cmd == "review":
         return _review(args)
     if args.cmd == "promote":
