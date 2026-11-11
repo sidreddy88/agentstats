@@ -1,4 +1,4 @@
-"""agentstats command line: summary, compare, judge, check, convert, sample, gate, size, init-ci,
+"""agentstats command line: audit, summary, compare, judge, check, convert, sample, gate, size, init-ci,
 preregister, switch, review, promote, grade, suggest, monitor, init."""
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ DESCRIPTION = ("Evals for agent systems: a statistics core (intervals, paired te
 GROUPS = [
     ("Set up and monitor", ["init", "monitor", "suggest", "suggest-apply", "init-ci"]),
     ("Gate and compare", ["gate", "compare", "summary", "size", "sample", "preregister", "switch"]),
-    ("Check your graders", ["grade", "grader-check", "judge", "review"]),
+    ("Check your graders", ["audit", "grade", "grader-check", "judge", "review"]),
     ("Grow the eval set", ["promote", "coverage"]),
     ("Read your data", ["convert", "convert-traces", "check"]),
 ]
@@ -247,6 +247,19 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--min-effect", type=float, help="ship only if the CI's lower bound beats this (e.g. 0.02)")
     _common(c)
 
+    au = sub.add_parser("audit", help="how good is this eval? power, blind spots, label bias, coverage in one report")
+    au.add_argument("results", nargs="+", help="baseline results (JSONL or Harbor job dirs); several = several runs")
+    au.add_argument("--other", nargs="+", help="another model or version on the same cases (label bias, informative)")
+    au.add_argument("--cases", help="the eval set's cases file (JSONL of {case, tags}); label:<who> tags give sources")
+    au.add_argument("--production", help="production rows (JSONL), for coverage")
+    au.add_argument("--prefix", action="append", default=[], help="tag prefix for coverage (repeat for several)")
+    au.add_argument("--rename", action="append", default=[], help="eval-set prefix read as a production prefix")
+    au.add_argument("--conf", type=float, default=0.95)
+    au.add_argument("--trials", type=int, default=2, help="trials per case each PR runs, for the power line (2)")
+    au.add_argument("--sims", type=int, default=300, help="simulations for the power line (default 300)")
+    au.add_argument("--seed", type=int, default=0)
+    au.add_argument("--json", action="store_true")
+
     j = sub.add_parser("judge", help="judge vs human labels, human agreement, judge consistency")
     j.add_argument("labels", help="JSONL: item, rater (human:<name> | judge), verdict, [run], [split]")
     j.add_argument("--json", action="store_true")
@@ -430,6 +443,17 @@ def main(argv: list[str] | None = None) -> int:
         return switch_cli.run(args)
     if args.cmd == "grader-check":
         return _grader_check(args)
+    if args.cmd == "audit":
+        from agentstats import audit, coverage
+        res = audit.run(_load_many(args.results, "baseline"),
+                        other=_load_many(args.other, "other") if args.other else None,
+                        cases=sample.load_cases(args.cases) if args.cases else None,
+                        production=coverage.load_rows(args.production) if args.production else None,
+                        prefixes=args.prefix, rename=dict(x.split("=", 1) for x in args.rename), trials=args.trials,
+                        conf=args.conf,
+                        sims=args.sims, seed=args.seed)
+        print(json.dumps(res, indent=1, default=str) if args.json else audit.render(res), end="")
+        return 0
     if args.cmd == "coverage":
         from agentstats import coverage
         rename = dict(x.split("=", 1) for x in args.rename)
