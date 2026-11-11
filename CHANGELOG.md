@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.15.0 (unreleased)
+
+**How good is this eval?**
+- `agentstats audit RUNS [--other RUNS] [--cases cases.jsonl] [--production rows.jsonl --prefix P]`: one scorecard
+  (ok / warn / bad / skipped, then the top fix) from files you already have, no model calls:
+  - power: smallest drop the PR gate catches 80% of the time (`size`'s simulation, `--trials` per PR)
+  - difficulty: regression suite, frontier or too hard (as in `summary`)
+  - blind spots (new): passing attempts that broke a behaviour rule, with a Wilson interval and the worst rule;
+    the outcome check can't see these
+  - label source: share of labels written by a model (`promote` provenance tags)
+  - label bias (new): the baseline agrees with the labels almost perfectly while `--other` is marked down on the
+    same cases, so the labels may be the baseline's own answers; warns only, it's a heuristic
+  - informative (new): cases every version always passes carry no information about a change
+  - coverage: production types with no eval cases (as in `coverage`)
+  A line whose input is missing says which flag it needs.
+
 ## 0.14.0 (2026-11-06)
 
 **Grade your grader**

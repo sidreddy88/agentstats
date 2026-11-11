@@ -28,6 +28,7 @@ Or pick what you need (Python 3.11+, one runtime dependency: scipy):
 | set up evals from your traces in one step | `agentstats init` |
 | know how good and how reliable the agent is | `agentstats summary RUNS...` |
 | know whether B really beats A | `agentstats compare --a RUNS --b RUNS` |
+| know how good your eval is: power, blind spots, label bias, coverage | `agentstats audit RUNS [--other RUNS] [--cases cases.jsonl]` |
 | block a regressing pull request, check main nightly | `agentstats gate --policy agentstats.toml --tier pr` (starter files: `agentstats init-ci`) |
 | know whether your gate would catch a drop before trusting it | `agentstats size --baseline baseline.jsonl` |
 | watch production agents weekly from their traces | `agentstats monitor --config-dir agentstats/agents --days 7 --out monitor` |
@@ -290,6 +291,47 @@ These two commands started as a separate package, stepdown. They're a thin layer
 live here for now. If the model-switch side grows into its own system (suggesting candidate models, adapting the
 harness with harness-evolve, deciding as runs accumulate, shadow runs on live traffic), it may become a separate
 package again.
+
+## How good is my eval? `agentstats audit`
+
+One scorecard from files you already have, no model calls: can the gate catch a drop that matters, is the set too
+easy, does the outcome check miss how the agent got its answer, did the labels come from a model, does the set tell
+versions apart, and is it like production. A line whose input is missing says which flag it needs.
+
+On agent-platform's triage gate, with the agent back on Claude Haiku 4.5 (114 held-out cases, 2 trials, $1.45) and
+the Haiku 5.5 baseline as `--other`:
+
+```
+$ agentstats audit haiku45.jsonl --other triage_gate_baseline.jsonl
+Eval health: 114 cases, 2 run(s)
+
+⚠️  power         catches a 9-pt drop 88% of the time (114 cases, 2 trials per PR)
+⚠️  difficulty    regression (93% mean case pass rate, 89% always pass)
+❌ blind spots   80% of passing attempts broke a rule (74-85%); worst: called_get_occurrence_count broken in 80%
+·· label source  skipped: pass --cases (with label:<who> tags, as `promote` writes)
+✅ label bias    baseline 93% vs other 94% on 114 shared cases; 1 only the baseline ever passes
+⚠️  informative   82% of cases always pass for every version
+·· coverage      skipped: pass --production and --prefix
+
+Top fix: make called_get_occurrence_count part of passing: the outcome check can't see it
+```
+
+93% accuracy, and four in five passing answers stated a count without looking it up. Label bias is clean here
+because these labels were already relaxed after the earlier comparison marked Haiku 5.5 down for not repeating Haiku
+4.5's answers; on the original labels that's the pattern the line is for.
+
+| Line | Bad / warn when |
+|---|---|
+| power | the PR gate catches a 5-point drop less than 80% of the time (bad above 10 points) |
+| difficulty | a regression suite or in between (warn), mostly failing (bad) |
+| blind spots | any passing attempt broke a rule (warn); the interval's lower bound is above 5% (bad) |
+| label source | any labels written by a model (warn); one model wrote most of them (bad) |
+| label bias | baseline 95%+, `--other` 5+ points lower, and the paired gap's interval excludes zero (warn only) |
+| informative | 80%+ of cases always pass for every version |
+| coverage | a production type has no eval cases (bad at 5%+ of runs) or is under-represented |
+
+Not included: A/A and known-break tests need new runs. Run unchanged code twice and `compare` it (it should show no
+difference), and run a deliberately broken version through `gate` (it should FAIL).
 
 ## Evals in CI, in tiers
 
