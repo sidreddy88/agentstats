@@ -67,7 +67,7 @@ def test_prompt_shows_material_but_not_ids_or_tags():
 
 def test_parse_maps_answers_to_pass_and_rejects_bad_replies():
     assert judge_run.parse('{"correct_amount": "Yes", "forbidden_promise": "no"}', RUBRIC) == \
-        ({"correct_amount": True, "forbidden_promise": True}, {})
+        ({"correct_amount": True, "forbidden_promise": True}, {}, [])
     assert judge_run.parse('{"correct_amount": "yes", "forbidden_promise": "yes"}', RUBRIC)[0]["forbidden_promise"] \
         is False                                            # "yes" to a pass=no question fails it
     assert judge_run.parse("I think yes", RUBRIC) is None
@@ -77,7 +77,7 @@ def test_parse_maps_answers_to_pass_and_rejects_bad_replies():
 
 def test_run_verdicts_rows_and_checks():
     labels, rows, counts = judge_run.run(ITEMS, RUBRIC, fake(GOOD))
-    assert counts == {"calls": 3, "judged": 3, "unparsed": 0, "errors": 0}
+    assert counts == {"calls": 3, "judged": 3, "unparsed": 0, "errors": 0, "unknown_answers": 0}
     assert [lab["verdict"] for lab in labels] == ["pass", "fail", "fail"]
     by_case = {r["case"]: r for r in rows}
     assert by_case["c1"]["passed"] is True and by_case["c1"]["tags"] == ["intent:refund"]
@@ -102,7 +102,7 @@ def test_unparsed_reply_and_transport_error_are_judge_failures_not_agent_failure
             return "no idea"
         return GOOD["$20"]
     labels, rows, counts = judge_run.run(ITEMS, RUBRIC, chat)
-    assert counts == {"calls": 3, "judged": 1, "unparsed": 1, "errors": 1}
+    assert counts == {"calls": 3, "judged": 1, "unparsed": 1, "errors": 1, "unknown_answers": 0}
     by_case = {r["case"]: r for r in rows}
     assert by_case["c2"]["infra_error"].startswith("ConnectionError") and by_case["c2"]["passed"] is None
     assert by_case["c3"]["infra_error"] == "judge reply not parsed"
@@ -172,7 +172,7 @@ COND = [{"name": "looked_up", "question": "Did it look up the order?", "pass": "
 def test_answers_carry_reasons_and_conditional_questions_may_be_na():
     reply = ('{"looked_up": {"answer": "yes", "reason": "get_order called first"}, '
              '"label_if_eligible": {"answer": "n/a", "reason": "order was ineligible"}}')
-    answers, reasons = judge_run.parse(reply, COND)
+    answers, reasons, _ = judge_run.parse(reply, COND)
     assert answers == {"looked_up": True, "label_if_eligible": None}
     assert reasons == {"looked_up": "get_order called first", "label_if_eligible": "order was ineligible"}
     assert judge_run.item_verdict(answers) == "pass"                  # the n/a question is left out
@@ -209,3 +209,17 @@ def test_judge_warns_when_labels_mix_judge_versions(tmp_path, capsys):
         {"item": "a", "rater": "judge", "verdict": "pass", "run": 2, "judge": "m|rubric:2|prompt:2"}]))
     cli.main(["judge", str(f)])
     assert "come from 2 judge versions" in capsys.readouterr().out
+
+
+# ---- unknown: a way out instead of a guess (0.15.0) ---------------------------------------------------------------
+
+def test_unknown_is_allowed_on_any_question_never_passes_and_is_counted():
+    reply = ('{"looked_up": {"answer": "unknown", "reason": "no tool results in the material"}, '
+             '"label_if_eligible": {"answer": "n/a", "reason": "ineligible"}}')
+    answers, reasons, unknown = judge_run.parse(reply, COND)
+    assert answers == {"looked_up": False, "label_if_eligible": None} and unknown == ["looked_up"]
+    assert judge_run.item_verdict(answers) == "fail"                  # unknown never lets an item pass
+    labels, rows, counts = judge_run.run([{"item": "i1", "output": "o"}], COND, lambda m: reply)
+    assert counts["unknown_answers"] == 1 and labels[0]["unknown"] == ["looked_up"]
+    assert rows[0]["passed"] is False and rows[0]["infra_error"] is None
+    assert "unknown" in judge_run.SYSTEM

@@ -123,6 +123,7 @@ def _grade(args, chat=None) -> int:
         Path(args.rows).parent.mkdir(parents=True, exist_ok=True)
         Path(args.rows).write_text("".join(json.dumps(r) + "\n" for r in rows))
     print(f"{counts['calls']} judge calls: {counts['judged']} judged, {counts['unparsed']} unparsed replies, "
+          f"{counts['unknown_answers']} unknown answers, "
           f"{counts['errors']} errors. Wrote {args.out}" + (f" and {args.rows}" if args.rows else "") + ".")
     if args.repeats > 1:
         print(f"Judge consistency: `agentstats judge {args.out}`; add human labels to the same file to check "

@@ -16,6 +16,12 @@
   - coverage: production types with no eval cases (as in `coverage`)
   A line whose input is missing says which flag it needs.
 
+**The judge can say it can't tell**
+- `grade`: any rubric question may now be answered `unknown` when the material doesn't show enough to answer it, so
+  the judge isn't pushed into guessing yes or no. Unknown never passes (it counts as a failed question); label rows
+  list the unknown questions, and the summary prints how many answers were unknown (many usually means the judge is
+  missing material, see `--fields`). Prompt format version 3, so earlier verdicts show as a different judge version.
+
 ## 0.14.0 (2026-11-06)
 
 **Grade your grader**

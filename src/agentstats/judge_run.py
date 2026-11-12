@@ -16,6 +16,10 @@ Rubric (JSON): a list of yes/no questions and the answer that counts as passing:
       "pass": "yes", "conditional": true}]
 An item passes when every applicable question gets its passing answer. A question marked "conditional" may be
 answered n/a (its condition doesn't hold) and is then left out; n/a on any other question makes the reply unusable.
+Any question may be answered "unknown" when the material doesn't show enough to answer it (e.g. the tool results the
+question is about weren't passed in): the judge isn't pushed into guessing yes or no. Unknown never passes: it counts
+as a failed question, and the summary reports how many answers were unknown, since many of them usually mean the
+judge is missing material (--fields) rather than that the agent failed.
 Every answer comes with a one-sentence reason (in the label rows), and every verdict records the judge version
 (model, rubric hash, prompt format) so results from a changed judge aren't compared as if nothing changed.
 Yes/no questions are easier for a model to answer consistently than a 1-10 score, and each failed question says what
@@ -41,12 +45,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 CARRIED = ("item", "case", "run", "arm", "tags")
-PROMPT_VERSION = 2   # bump when SYSTEM or the reply format changes: it's part of the judge version on every verdict
+PROMPT_VERSION = 3   # bump when SYSTEM or the reply format changes: it's part of the judge version on every verdict
 SYSTEM = ("You grade an AI agent's work. Answer each question about the material with yes or no, judging only what "
           "the material shows. A question marked [conditional] may be answered n/a when the material shows its "
-          "condition doesn't hold; never answer n/a otherwise. Give each answer a one-sentence reason that points to "
+          "condition doesn't hold; never answer n/a otherwise. If the material doesn't show enough to answer a "
+          "question, answer unknown rather than guess. Give each answer a one-sentence reason that points to "
           "the evidence in the material. Reply with one JSON object mapping each question's name to "
-          "{\"answer\": \"yes\" | \"no\" | \"n/a\", \"reason\": \"...\"}, and nothing else.")
+          "{\"answer\": \"yes\" | \"no\" | \"n/a\" | \"unknown\", \"reason\": \"...\"}, and nothing else.")
 
 Chat = Callable[[list[dict]], str]
 
@@ -106,8 +111,9 @@ def prompt(item: dict, rubric: list[dict], fields: list[str] | None = None) -> l
             {"role": "user", "content": f"{material}\n\n## Questions\n{questions}"}]
 
 
-def parse(reply: str, rubric: list[dict]) -> tuple[dict[str, bool | None], dict[str, str]] | None:
-    """({name: answered the passing answer, or None for n/a}, {name: reason}), or None if the reply isn't usable.
+def parse(reply: str, rubric: list[dict]) -> tuple[dict[str, bool | None], dict[str, str], list[str]] | None:
+    """({name: answered the passing answer, or None for n/a}, {name: reason}, [names answered unknown]), or None if
+    the reply isn't usable. An unknown answer is recorded as not passing (False) and listed.
     Accepts {"q": {"answer": "yes", "reason": "..."}} and the older {"q": "yes"}. n/a only counts for a question
     marked conditional; on any other question it makes the reply unusable (a judge mustn't dodge a question)."""
     m = re.search(r"\{.*\}", reply or "", re.S)
@@ -119,19 +125,23 @@ def parse(reply: str, rubric: list[dict]) -> tuple[dict[str, bool | None], dict[
         return None
     answers: dict[str, bool | None] = {}
     reasons: dict[str, str] = {}
+    unknown: list[str] = []
     for q in rubric:
         raw = data.get(q["name"])
         value, reason = (raw.get("answer"), raw.get("reason")) if isinstance(raw, dict) else (raw, None)
         v = str(value or "").strip().lower()
         if v in ("n/a", "na", "not applicable") and q.get("conditional"):
             answers[q["name"]] = None
+        elif v in ("unknown", "can't tell", "cannot tell"):
+            answers[q["name"]] = False
+            unknown.append(q["name"])
         elif v in ("yes", "no"):
             answers[q["name"]] = v == q.get("pass", "yes")
         else:
             return None
         if reason:
             reasons[q["name"]] = str(reason)[:300]
-    return answers, reasons
+    return answers, reasons, unknown
 
 
 def item_verdict(answers: dict[str, bool | None]) -> str:
@@ -181,8 +191,8 @@ def judge_one(item: dict, rubric: list[dict], chat: Chat, fields: list[str] | No
     except Exception as exc:                       # transport or server failure after retries
         return {"answers": None, "error": f"{type(exc).__name__}: {exc}"[:200], "unparsed": False}
     parsed = parse(reply, rubric)
-    answers, reasons = parsed if parsed else (None, {})
-    return {"answers": answers, "reasons": reasons, "error": None, "unparsed": parsed is None,
+    answers, reasons, unknown = parsed if parsed else (None, {}, [])
+    return {"answers": answers, "reasons": reasons, "unknown": unknown, "error": None, "unparsed": parsed is None,
             "reply": None if parsed else reply[:300]}
 
 
@@ -211,7 +221,7 @@ def run(items: list[dict], rubric: list[dict], chat: Chat, *, repeats: int = 1, 
     labels: list[dict] = []
     per_item: dict[int, list[dict]] = {i: [] for i in range(len(items))}
     errors: dict[int, str] = {}
-    counts = {"calls": len(jobs), "judged": 0, "unparsed": 0, "errors": 0}
+    counts = {"calls": len(jobs), "judged": 0, "unparsed": 0, "errors": 0, "unknown_answers": 0}
     for (i, r), res in zip(jobs, results, strict=True):
         if res["error"]:
             counts["errors"] += 1
@@ -223,9 +233,11 @@ def run(items: list[dict], rubric: list[dict], chat: Chat, *, repeats: int = 1, 
             labels.append({"item": str(items[i]["item"]), "rater": "judge", "verdict": "na", "run": r, **stamp})
             continue
         counts["judged"] += 1
+        counts["unknown_answers"] += len(res["unknown"])
         per_item[i].append(res["answers"])
         labels.append({"item": str(items[i]["item"]), "rater": "judge", "run": r,
-                       "verdict": item_verdict(res["answers"]), "reasons": res["reasons"], **stamp})
+                       "verdict": item_verdict(res["answers"]), "reasons": res["reasons"],
+                       **({"unknown": res["unknown"]} if res["unknown"] else {}), **stamp})
     rows = []
     for i, item in enumerate(items):
         tags = list(item.get("tags") or []) + ([f"judge:{version}"] if version else [])
