@@ -111,12 +111,16 @@ def verdict(value, pass_threshold: float = 1.0) -> tuple[bool | None, str | None
 
 
 def tool_calls(sample: dict) -> list[dict]:
-    """Tool calls in order, as {"name", "args"}: the shape agentstats' rule checks expect."""
+    """Tool calls in order, as {"name", "args", "result"}: the shape agentstats' rule checks expect. The result is
+    the tool message answering the call (matched on its id), or None."""
+    msgs = sample.get("messages", [])
+    results = {m.get("tool_call_id"): m.get("content") for m in msgs if m.get("role") == "tool"}
     calls = []
-    for m in sample.get("messages", []):
+    for m in msgs:
         if m.get("role") == "assistant":
             for c in m.get("tool_calls") or []:
-                calls.append({"name": c.get("function"), "args": c.get("arguments") or {}})
+                calls.append({"name": c.get("function"), "args": c.get("arguments") or {},
+                              "result": results.get(c.get("id"))})
     return calls
 
 

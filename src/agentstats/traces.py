@@ -90,7 +90,8 @@ def otlp_traces(path: str | Path, case_key: str = "agentstats.case") -> dict[str
             a = _attrs(s)
             if a.get("gen_ai.operation.name") == "execute_tool":
                 calls.append({"name": a.get("gen_ai.tool.name") or s.get("name", ""),
-                              "args": _args(a.get("gen_ai.tool.call.arguments"))})
+                              "args": _args(a.get("gen_ai.tool.call.arguments")),
+                              "result": a.get("gen_ai.tool.call.result")})
             tokens_in += int(a.get("gen_ai.usage.input_tokens") or 0)
             tokens_out += int(a.get("gen_ai.usage.output_tokens") or 0)
             case = case or a.get(case_key)
@@ -110,7 +111,8 @@ def langfuse_traces(path: str | Path) -> dict[str, dict]:
     out = {}
     for t in _read_json_or_jsonl(Path(path)):
         obs = sorted(t.get("observations") or [], key=lambda o: o.get("startTime") or "")
-        calls = [{"name": o.get("name", ""), "args": _args(o.get("input"))} for o in obs if o.get("type") == "TOOL"]
+        calls = [{"name": o.get("name", ""), "args": _args(o.get("input")), "result": o.get("output")}
+                 for o in obs if o.get("type") == "TOOL"]
         gens = [o for o in obs if o.get("type") == "GENERATION"]
         tokens_in = sum(int((o.get("usage") or {}).get("input") or 0) for o in gens)
         tokens_out = sum(int((o.get("usage") or {}).get("output") or 0) for o in gens)

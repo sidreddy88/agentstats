@@ -67,8 +67,9 @@ Other good tools exist (see [Related tools](#related-tools)). agentstats is buil
 1. **Reads trajectories, not score tables.** Harbor job directories, ATIF trajectories, Inspect AI logs and
    OpenTelemetry/Langfuse traces directly: pass/fail,
    infrastructure errors, tokens, cost, latency, steps and tool calls, plus deterministic rule checks on the
-   tool calls (`called`, `not_called`, `before`, `args`, and `max_calls` / `max_repeats` for over-retrieval and
-   tool flailing).
+   tool calls (`called`, `not_called`, `before`, `args`, `max_calls` / `max_repeats` for over-retrieval and
+   tool flailing, and `verified`: every write to the named tools was read back by whatever executed it, from
+   `"verified": true` in the call's result; `null`, meaning the read-back couldn't run, is skipped).
 2. **Picks the statistics from how the eval set was built, and says what claim they support.**
 
    | `--design` | Your eval set | Interval / comparison | Claim |

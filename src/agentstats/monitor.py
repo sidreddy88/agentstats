@@ -235,7 +235,8 @@ def join_traces(agents: list[dict], tools: list[dict], generations: list[dict] |
         out.append({"trace_id": a["traceId"], "agent": a, "model": m.most_common(1)[0][0] if m else "unknown",
                     "cost_usd": cost.get(a["traceId"]), "input_tokens": tin, "output_tokens": tout,
                     "calls": [{"name": t.get("name"), "input": as_json(t.get("input")) or {},
-                               "output": str(as_json(t.get("output")) or "")} for t in calls]})
+                               "output": str(as_json(t.get("output")) or ""),
+                               "result": as_json(t.get("output"))} for t in calls]})
     return out
 
 
@@ -469,7 +470,8 @@ def to_row(trace: dict, cfg: dict, adapter: Adapter) -> dict:
             row["input_tokens"], row["output_tokens"] = trace.get("input_tokens", 0), trace.get("output_tokens", 0)
         return row
     output = adapter.parse_output(trace)
-    calls = [{"name": c["name"], "args": c["input"] if isinstance(c["input"], dict) else {}} for c in trace["calls"]]
+    calls = [{"name": c["name"], "args": c["input"] if isinstance(c["input"], dict) else {},
+              "result": c.get("result", c.get("output"))} for c in trace["calls"]]
     checks: dict[str, bool] = {}
     for r in cfg.get("rules", []):
         if not condition_holds(r.get("when"), trace, output, adapter):
