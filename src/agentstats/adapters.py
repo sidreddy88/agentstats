@@ -29,12 +29,15 @@ def _seconds(span: dict | None) -> float | None:
 
 
 def tool_calls(trajectory: dict | str | Path) -> list[dict]:
-    """The agent's tool calls in order, from an ATIF trajectory: [{"name", "args", "step"}]."""
+    """The agent's tool calls in order, from an ATIF trajectory: [{"name", "args", "step", "result"}]. The result is
+    the step's observation for that call (matched on tool_call_id), or None."""
     d = trajectory if isinstance(trajectory, dict) else json.loads(Path(trajectory).read_text())
     calls = []
     for i, st in enumerate(d.get("steps") or []):
         if st.get("source") != "agent":
             continue
+        results = {r.get("source_call_id"): r.get("content")
+                   for r in ((st.get("observation") or {}).get("results") or []) if r.get("source_call_id")}
         for call in st.get("tool_calls") or []:
             args = call.get("arguments") or {}
             if isinstance(args, str):
@@ -42,7 +45,8 @@ def tool_calls(trajectory: dict | str | Path) -> list[dict]:
                     args = json.loads(args)
                 except json.JSONDecodeError:
                     args = {"_raw": args}
-            calls.append({"name": call.get("function_name"), "args": args, "step": i})
+            calls.append({"name": call.get("function_name"), "args": args, "step": i,
+                          "result": results.get(call.get("tool_call_id"))})
     return calls
 
 
